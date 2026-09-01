@@ -87,10 +87,25 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
  */
 export async function draftToday(
   answers: CheckinAnswers,
-): Promise<{ draft: DayDraft; usedModel: boolean }> {
+): Promise<{ draft: DayDraft; usedModel: boolean; verbatim: boolean }> {
+  const own = answers.open?.trim();
+
   const drafted = await draftDay(answers);
-  if (drafted) return { draft: drafted, usedModel: true };
-  return { draft: composeFallbackDraft(answers), usedModel: false };
+  const base = drafted ?? composeFallbackDraft(answers);
+
+  // If they wrote their own account of the day, it is the summary, exactly as
+  // typed. The prompt says so too, but this is the guarantee: the model's
+  // summary is discarded rather than trusted to have left the text alone. It
+  // still contributes the title, tags and people.
+  if (own) {
+    return {
+      draft: { ...base, summary: own },
+      usedModel: drafted !== null,
+      verbatim: true,
+    };
+  }
+
+  return { draft: base, usedModel: drafted !== null, verbatim: false };
 }
 
 /**

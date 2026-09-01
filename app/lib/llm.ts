@@ -31,6 +31,8 @@ export type CheckinAnswers = {
   /** Did they get outside. */
   outside: boolean | null;
   gratitude: string | null;
+  /** Whatever they wrote unprompted. Becomes the summary verbatim. */
+  open: string | null;
 };
 
 const DayDraftSchema = z.object({
@@ -57,6 +59,7 @@ Voice:
 
 Rules:
 - Invent nothing. Every detail must come from their answers. If they mentioned no people, return an empty people array.
+- If "In their own words" is present, that text is the summary and the caller uses it verbatim. Do not rewrite, tidy, shorten or extend it. Return it unchanged as the summary, and spend your effort on the title, tags and people instead.
 - title: one short line, lowercase after the first word, no trailing full stop.
 - tags: at most four, one or two words each, drawn from what they actually said.
 - people: first names only, exactly as they wrote them.`;
@@ -75,6 +78,9 @@ function buildUserContent(answers: CheckinAnswers): string {
   if (answers.gratitude) {
     lines.push(`Grateful for: ${answers.gratitude}`);
   }
+  if (answers.open) {
+    lines.push(`In their own words: ${answers.open}`);
+  }
   return lines.join("\n");
 }
 
@@ -91,6 +97,16 @@ export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
   if (answers.highlight) sentences.push(`${answers.highlight.replace(/\.$/, "")}.`);
   if (answers.outside === true) sentences.push("Got outside at some point.");
   if (answers.gratitude) sentences.push(`Grateful for ${asSentenceTail(answers.gratitude)}`);
+
+  // Their own words stand alone. Nothing is added around them.
+  if (answers.open) {
+    return {
+      title: answers.highlight?.replace(/\.$/, "") ?? firstWords(answers.open),
+      summary: answers.open.trim(),
+      tags: answers.outside === true ? ["Outside"] : [],
+      people: [],
+    };
+  }
 
   const tags: string[] = [];
   if (answers.outside === true) tags.push("Outside");
@@ -111,6 +127,12 @@ export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
  * up". Mangling a name is worse than an awkward capital, so the text is left
  * exactly as written and only the full stop is normalised.
  */
+/** First few words of a longer piece of text, for a fallback title. */
+function firstWords(text: string, count = 6): string {
+  const words = text.trim().split(/\s+/).slice(0, count).join(" ");
+  return words.replace(/[.,;:]$/, "");
+}
+
 function asSentenceTail(text: string): string {
   const trimmed = text.trim();
   return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
@@ -209,10 +231,11 @@ const FIELD_PURPOSE: Record<StepField, string> = {
   highlight: "The one thing from today worth remembering in a year.",
   outside: "Whether they got outside today. Must be answerable with yes or no.",
   gratitude: "What they were grateful for today.",
+  open: "An open invitation to write whatever they want about today, in as much or as little detail as they like. Not a specific question, and never narrow it to one topic.",
   photo:
     "Adding a photo from today. The question must explicitly ask for a photo, because the controls below it offer camera and camera roll.",
   summary:
-    "Introducing the draft summary shown below, which they can edit. Not a question about their day.",
+    "Introducing the text shown below, which they can edit. If they wrote their own account of the day earlier, this is their own words rather than a draft, so introduce it that way. Not a question about their day.",
 };
 
 const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in so it fits the person being asked.

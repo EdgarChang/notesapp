@@ -427,3 +427,17 @@
   line-height: 1.5;
   color: var(--fg-3);
 }
+
+/* The open-ended step. Enter makes a new line, so the send button submits. */
+.multiline {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 14px 16px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--fg-1);
+  border: 1.5px solid var(--border-2);
+  border-radius: 6px;
+  background: var(--bg-1);
+}

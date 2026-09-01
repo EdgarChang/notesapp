@@ -18,6 +18,8 @@ export type StepField =
   | "highlight"
   | "outside"
   | "gratitude"
+  /** Whatever they feel like writing. Kept verbatim as the day's summary. */
+  | "open"
   | "photo"
   | "summary";
 
@@ -33,20 +35,75 @@ export type ScriptStep = {
   ack: string;
   /** Placeholder for a text step. */
   placeholder?: string;
+  /** Render a textarea rather than a single-line input. */
+  multiline?: boolean;
 };
 
 export type AssistantTone = "Playful" | "Brief";
 
-export function buildScript(tone: AssistantTone): ScriptStep[] {
+/* ---------------------------------------------------------------------------
+ * Order
+ *
+ * Mood stays first: it anchors the 1-5 scale and colours how the rest of the
+ * night reads. Photo and summary stay last, since the summary drafts from
+ * everything before it. The middle four rotate, so the check-in does not feel
+ * like the same form every evening.
+ *
+ * The shuffle is seeded rather than random. A random order would reshuffle on
+ * every re-render and could reorder the questions underneath someone mid
+ * check-in; seeding on the user and the date gives one stable order per person
+ * per night.
+ * ------------------------------------------------------------------------- */
+
+function hashSeed(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Small deterministic PRNG, enough for ordering four items. */
+function mulberry32(a: number): () => number {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffled<T>(items: T[], seed: string): T[] {
+  const rand = mulberry32(hashSeed(seed));
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const a = out[i] as T;
+    const b = out[j] as T;
+    out[i] = b;
+    out[j] = a;
+  }
+  return out;
+}
+
+/**
+ * @param seed Stable per user per day, so the order holds for the whole
+ * check-in. Pass an empty string to keep the written order.
+ */
+export function buildScript(tone: AssistantTone, seed = ""): ScriptStep[] {
   const brief = tone === "Brief";
-  return [
-    {
-      kind: "chips",
-      field: "mood",
-      question: brief ? "How was today?" : "Evening. How did today actually land?",
-      chips: ["Rough", "Meh", "Steady", "Good", "Great"],
-      ack: "Noted.",
-    },
+
+  const first: ScriptStep = {
+    kind: "chips",
+    field: "mood",
+    question: brief ? "How was today?" : "Evening. How did today actually land?",
+    chips: ["Rough", "Meh", "Steady", "Good", "Great"],
+    ack: "Noted.",
+  };
+
+  const middle: ScriptStep[] = [
     {
       kind: "text",
       field: "highlight",
@@ -84,6 +141,22 @@ export function buildScript(tone: AssistantTone): ScriptStep[] {
       ack: "Filed under things that went right.",
     },
     {
+      // Open-ended. Whatever they write here becomes the day's summary word for
+      // word: when someone has taken the trouble to write it themselves, the
+      // model has no business rewording it.
+      kind: "text",
+      field: "open",
+      question: brief
+        ? "Anything else?"
+        : "Anything else you want to put down, in your own words?",
+      placeholder: "Say as much or as little as you like",
+      multiline: true,
+      ack: "Kept, exactly as you wrote it.",
+    },
+  ];
+
+  const last: ScriptStep[] = [
+    {
       kind: "photo",
       field: "photo",
       question: brief
@@ -100,6 +173,8 @@ export function buildScript(tone: AssistantTone): ScriptStep[] {
       ack: "",
     },
   ];
+
+  return [first, ...(seed ? shuffled(middle, seed) : middle), ...last];
 }
 
 /** Pacing, from the handoff's "Interactions & behavior" section. */

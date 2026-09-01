@@ -100,6 +100,18 @@ Screens first against seeded data, backend second.
 
 ## How the check-in adapts
 
+The order varies. Mood stays first, since it anchors the 1-5 scale and colours
+how the rest of the night reads, and photo then summary stay last, since the
+summary draws on everything before them. The four in between rotate on a shuffle
+seeded from the user and the date, so it is stable for a whole check-in but
+different from yesterday's.
+
+One of those four is open-ended: write whatever you like about the day, in a
+textarea rather than a single line. **Whatever you write there becomes the
+summary word for word.** The model still supplies the title, tags and people, but
+its summary is discarded rather than trusted to have left your text alone, and
+`summary_draft` is stored empty because nothing was drafted to compare against.
+
 One Haiku call per step returns both a reply to the answer just given and the
 next question, reworded for this person. It receives their focus topics, recent
 entry titles, the people they name, tonight's answers so far, and the questions

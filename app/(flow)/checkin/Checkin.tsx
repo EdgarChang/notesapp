@@ -32,6 +32,8 @@ type Answers = {
   highlight: string | null;
   outside: boolean | null;
   gratitude: string | null;
+  /** Their own account of the day. Kept verbatim as the summary. */
+  open: string | null;
 };
 
 type Draft = {
@@ -46,17 +48,22 @@ type Draft = {
   people: string[];
   /** False when the plainly composed fallback was used. */
   usedModel: boolean;
+  /** True when the summary is the user's own words, untouched. */
+  verbatim: boolean;
 };
 
 export function Checkin({
   tone,
+  seed,
   showAdaptiveNotes = true,
 }: {
   tone: AssistantTone;
+  /** Stable per person per night; fixes tonight's question order. */
+  seed: string;
   showAdaptiveNotes?: boolean;
 }) {
   const router = useRouter();
-  const script = useMemo(() => buildScript(tone), [tone]);
+  const script = useMemo(() => buildScript(tone, seed), [tone, seed]);
 
   const [step, setStep] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -75,6 +82,7 @@ export function Checkin({
     highlight: null,
     outside: null,
     gratitude: null,
+    open: null,
   });
 
   /**
@@ -232,7 +240,7 @@ export function Checkin({
     setDrafting(true);
 
     draftToday(answers)
-      .then(({ draft: d, usedModel }) => {
+      .then(({ draft: d, usedModel, verbatim }) => {
         setSummary(d.summary);
         setDraft({
           title: d.title,
@@ -240,6 +248,7 @@ export function Checkin({
           tags: d.tags,
           people: d.people,
           usedModel,
+          verbatim,
         });
       })
       .catch((error) => {
@@ -269,6 +278,9 @@ export function Checkin({
         break;
       case "gratitude":
         setAnswers((a) => ({ ...a, gratitude: text }));
+        break;
+      case "open":
+        setAnswers((a) => ({ ...a, open: text }));
         break;
       default:
         break;
@@ -300,7 +312,9 @@ export function Checkin({
       mood: answers.mood,
       title: draft?.title ?? answers.highlight,
       summary,
-      summaryDraft: draft?.summary ?? "",
+      // Nothing was drafted when the summary is their own words, so there is
+      // no draft to compare against.
+      summaryDraft: draft && !draft.verbatim ? draft.summary : "",
       gratitude: answers.gratitude,
       tags: tags.slice(0, 4),
       voiceDurationSeconds: null,
@@ -420,16 +434,31 @@ export function Checkin({
               </div>
             ) : null}
             <div className={styles.textRow}>
-              <input
-                className={styles.input}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") sendInput();
-                }}
-                placeholder={dockStep.placeholder ?? "Type your answer"}
-                aria-label={dockStep.question}
-              />
+              {dockStep.multiline ? (
+                <textarea
+                  className={styles.multiline}
+                  rows={3}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter makes a new line here; the send button submits.
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendInput();
+                  }}
+                  placeholder={dockStep.placeholder ?? "Type your answer"}
+                  aria-label={dockStep.question}
+                />
+              ) : (
+                <input
+                  className={styles.input}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") sendInput();
+                  }}
+                  placeholder={dockStep.placeholder ?? "Type your answer"}
+                  aria-label={dockStep.question}
+                />
+              )}
               <button
                 type="button"
                 className={styles.send}
@@ -440,7 +469,7 @@ export function Checkin({
                 &rarr;
               </button>
             </div>
-            {dockStep.field === "gratitude" ? (
+            {dockStep.field === "gratitude" || dockStep.field === "open" ? (
               <button type="button" className={styles.skip} onClick={skip}>
                 Skip this one
               </button>
@@ -496,6 +525,8 @@ export function Checkin({
             />
             {drafting ? (
               <div className={styles.draftNote}>Writing your day&hellip;</div>
+            ) : draft?.verbatim ? (
+              <div className={styles.draftNote}>Your words, kept as you wrote them.</div>
             ) : draft && !draft.usedModel ? (
               <div className={styles.draftNote}>
                 Put together from your answers. Edit it into your own words.
