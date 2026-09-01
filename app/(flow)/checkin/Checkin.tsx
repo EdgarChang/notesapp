@@ -3,113 +3,68 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { draftToday, nextQuestion, saveCheckin } from "@/app/lib/actions";
-import {
-  buildScript,
-  CANNED_PHOTO_CAPTION,
-  TIMING,
-  type AssistantTone,
-  type ScriptStep,
-} from "@/app/lib/checkin";
-import { MOOD_LABELS, type Mood } from "@/app/lib/entries";
+import { draftToday, nextQuestion, saveCheckin, type PromptAnswer } from "@/app/lib/actions";
+import { buildSteps, TIMING, type Step } from "@/app/lib/checkin";
+import type { Selection } from "@/app/lib/selection";
 import styles from "./checkin.module.css";
 
 type Message =
-  | { id: number; from: "bot"; kind: "text"; text: string; adaptiveNote?: string }
-  | { id: number; from: "user"; kind: "text"; text: string }
-  | { id: number; from: "user"; kind: "photo"; caption: string };
-
-/** Plain Omit collapses a union to its shared keys, so distribute over it. */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-
-/** A message before the list assigns it an id. */
-type NewMessage = DistributiveOmit<Message, "id">;
-
-type Answers = {
-  mood: Mood | null;
-  highlight: string | null;
-  outside: boolean | null;
-  gratitude: string | null;
-  /** Their own account of the day. Kept verbatim as the summary. */
-  open: string | null;
-};
+  | { id: number; from: "bot"; kind: "text"; text: string }
+  | { id: number; from: "user"; kind: "text"; text: string };
 
 type Draft = {
   title: string;
-  /**
-   * The summary exactly as drafted, kept separate from the editable `summary`
-   * state so summary_draft records what was offered rather than what was kept.
-   * Comparing the two is the only honest signal for how much people rewrite.
-   */
   summary: string;
   tags: string[];
   people: string[];
-  /** False when the plainly composed fallback was used. */
   usedModel: boolean;
-  /** True when the summary is the user's own words, untouched. */
   verbatim: boolean;
 };
 
+const SCALE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
 export function Checkin({
-  tone,
-  seed,
-  showAdaptiveNotes = true,
+  selection,
+  knownPeople,
 }: {
-  tone: AssistantTone;
-  /** Stable per person per night; fixes tonight's question order. */
-  seed: string;
-  showAdaptiveNotes?: boolean;
+  selection: Selection;
+  /** Names from recent entries, offered as taps on the people anchor. */
+  knownPeople: string[];
 }) {
   const router = useRouter();
-  const script = useMemo(() => buildScript(tone, seed), [tone, seed]);
+  const steps = useMemo(() => buildSteps(selection), [selection]);
 
-  const [step, setStep] = useState(0);
+  const [index, setIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState(false);
-  /** The text input buffer for a text step. */
   const [inputText, setInputText] = useState("");
-  /** The editable summary shown on the last step. */
+  const [picked, setPicked] = useState<string[]>([]);
   const [summary, setSummary] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const [answers, setAnswers] = useState<Answers>({
-    mood: null,
-    highlight: null,
-    outside: null,
-    gratitude: null,
-    open: null,
-  });
+  /** a001 on 0-10, the trend line. */
+  const [mood, setMood] = useState<number | null>(null);
+  const [anchors, setAnchors] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<PromptAnswer[]>([]);
 
-  /**
-   * The step as asked. The picker may reword the question, the chips and the
-   * adaptive note, so the dock has to render this rather than the written
-   * script. Null while the next question is still being fetched.
-   */
-  const [activeStep, setActiveStep] = useState<ScriptStep | null>(null);
-
-  /** Lets askAt read the latest answers without becoming a changing dependency. */
-  const answersRef = useRef(answers);
-  useEffect(() => {
-    answersRef.current = answers;
-  }, [answers]);
-
-  /** Questions already asked tonight, so the picker does not reuse a framing. */
-  const askedRef = useRef<string[]>([]);
-  /** The answer just given, which the reply should respond to. */
-  const lastAnswerRef = useRef<string | null>(null);
+  const [activeStep, setActiveStep] = useState<Step | null>(null);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  /** Guards against drafting twice if the last step is re-entered. */
   const draftRequested = useRef(false);
+  const askedRef = useRef<string[]>([]);
+  const lastAnswerRef = useRef<string | null>(null);
+  const answersRef = useRef(answers);
+  const anchorsRef = useRef(anchors);
+  useEffect(() => {
+    answersRef.current = answers;
+    anchorsRef.current = anchors;
+  }, [answers, anchors]);
 
-  /** setTimeout that is cancelled if the screen unmounts mid-sequence. */
   const later = useCallback((fn: () => void, ms: number) => {
     timers.current.push(setTimeout(fn, ms));
   }, []);
@@ -122,24 +77,27 @@ export function Checkin({
     };
   }, []);
 
-  const push = useCallback((message: NewMessage) => {
+  const push = useCallback((message: Omit<Message, "id">) => {
     setMessages((prev) => [...prev, { ...message, id: nextId.current++ }]);
   }, []);
 
-  /**
-   * Reply to the last answer, then ask question `index`.
-   *
-   * One request produces both, since the model needs the same context for each:
-   * what they just said, and what the next step is for. The sequence mirrors a
-   * person replying — a short reaction, a beat, then the question — so the
-   * typing indicator runs twice rather than covering one fixed delay.
-   *
-   * nextQuestion always resolves, falling back to the written step and its
-   * written acknowledgement, so a slow or failed call never stalls the check-in.
-   */
+  /** Everything answered so far, as context for the reply and the draft. */
+  const contextAnswers = useCallback(
+    () => ({
+      mood: null,
+      highlight:
+        answersRef.current.find((a) => a.value && a.responseType === "short_text")
+          ?.value ?? null,
+      outside: null,
+      gratitude: null,
+      open: null,
+    }),
+    [],
+  );
+
   const askAt = useCallback(
-    (index: number) => {
-      const base = script[index];
+    (i: number) => {
+      const base = steps[i];
       if (!base) return;
 
       setTyping(true);
@@ -148,174 +106,138 @@ export function Checkin({
 
       void nextQuestion(
         base,
-        answersRef.current,
+        contextAnswers(),
         askedRef.current,
         lastAnswerRef.current,
-        // The written reply belongs to the step just answered.
-        script[index - 1]?.ack ?? "",
-      ).then(
-        ({ step, acknowledgement }) => {
-          const showQuestion = () => {
+        "",
+      ).then(({ step, acknowledgement }) => {
+        const show = () => {
+          setTyping(false);
+          setActiveStep(step);
+          askedRef.current = [...askedRef.current, step.prompt.text];
+          push({ from: "bot", kind: "text", text: step.prompt.text });
+        };
+
+        if (!acknowledgement) {
+          later(show, Math.max(0, TIMING.typing - (Date.now() - startedAt)));
+          return;
+        }
+
+        later(
+          () => {
             setTyping(false);
-            setActiveStep(step);
-            askedRef.current = [...askedRef.current, step.question];
-            push({
-              from: "bot",
-              kind: "text",
-              text: step.question,
-              ...(showAdaptiveNotes && step.adaptiveNote
-                ? { adaptiveNote: step.adaptiveNote }
-                : {}),
-            });
-          };
-
-          // Nothing to reply to: hold the indicator to its floor so a fast
-          // response does not flash past, then ask.
-          if (!acknowledgement) {
-            later(showQuestion, Math.max(0, TIMING.typing - (Date.now() - startedAt)));
-            return;
-          }
-
-          later(
-            () => {
-              setTyping(false);
-              push({ from: "bot", kind: "text", text: acknowledgement });
-              // A beat, then the assistant starts typing the question.
-              later(() => setTyping(true), TIMING.ack);
-              later(showQuestion, TIMING.ack + TIMING.typing);
-            },
-            Math.max(0, TIMING.ack - (Date.now() - startedAt)),
-          );
-        },
-      );
+            push({ from: "bot", kind: "text", text: acknowledgement });
+            later(() => setTyping(true), TIMING.ack);
+            later(show, TIMING.ack + TIMING.typing);
+          },
+          Math.max(0, TIMING.ack - (Date.now() - startedAt)),
+        );
+      });
     },
-    [script, showAdaptiveNotes, push, later],
+    [steps, contextAnswers, push, later],
   );
 
-  // Open with the first question once the screen has painted.
   useEffect(() => {
     const t = setTimeout(() => askAt(0), TIMING.open);
     return () => clearTimeout(t);
   }, [askAt]);
 
-  /**
-   * Post the answer and move on. The reply to it comes back from askAt with the
-   * next question, so this no longer pushes a written acknowledgement itself.
-   */
-  const advance = useCallback(
-    (answer: NewMessage | null) => {
-      if (answer) push(answer);
-      lastAnswerRef.current =
-        answer && answer.kind === "text"
-          ? answer.text
-          : answer?.kind === "photo"
-            ? "added a photo"
-            : null;
-      const next = step + 1;
-      setStep(next);
+  const current = activeStep ?? steps[index];
+  const dockStep = !typing && activeStep !== null ? current : undefined;
+  const atSummary = index >= steps.length;
+
+  /** Record the answer, post it, and move on. `value` null means skipped. */
+  const answer = useCallback(
+    (value: string | null) => {
+      const step = steps[index];
+      if (!step) return;
+      const { prompt, isAnchor } = step;
+
+      if (value !== null) {
+        push({ from: "user", kind: "text", text: value });
+        lastAnswerRef.current = value;
+      } else {
+        lastAnswerRef.current = null;
+      }
+
+      if (isAnchor) {
+        if (prompt.response_type === "scale_0_10" && prompt.id === "a001") {
+          setMood(value === null ? null : Number(value));
+        }
+        if (value !== null) {
+          setAnchors((a) => ({ ...a, [prompt.id]: value }));
+        }
+      } else {
+        setAnswers((a) => [
+          ...a,
+          { promptId: prompt.id, responseType: prompt.response_type, value },
+        ]);
+      }
+
       setInputText("");
-      askAt(next);
+      setPicked([]);
+      const next = index + 1;
+      setIndex(next);
+      if (next < steps.length) askAt(next);
+      else setActiveStep(null);
     },
-    [step, push, askAt],
+    [index, steps, push, askAt],
   );
 
-  // The step as asked, falling back to the written one before it arrives.
-  const current = activeStep ?? script[step];
-  /**
-   * Controls appear only once the question has actually been asked.
-   *
-   * Previously the dock switched the instant `step` incremented, so a fast
-   * tapper could answer a question before seeing it, and with the picker in
-   * play the chip labels would visibly change under them.
-   */
-  const dockStep = !typing && activeStep !== null ? current : undefined;
-
-  /**
-   * Fetch the draft as soon as the summary step is reached, so the textarea is
-   * usually filled by the time the question finishes typing out.
-   */
+  // Draft once the questions are done.
   useEffect(() => {
-    if (current?.field !== "summary" || draftRequested.current) return;
+    if (!atSummary || draftRequested.current) return;
     draftRequested.current = true;
     setDrafting(true);
 
-    draftToday(answers)
+    const written = answersRef.current
+      .filter((a) => a.value)
+      .map((a) => a.value as string)
+      .join("\n");
+
+    draftToday({
+      mood: null,
+      highlight: anchorsRef.current["a002"] ?? null,
+      outside: null,
+      gratitude: null,
+      open: written || null,
+    })
       .then(({ draft: d, usedModel, verbatim }) => {
         setSummary(d.summary);
-        setDraft({
-          title: d.title,
-          summary: d.summary,
-          tags: d.tags,
-          people: d.people,
-          usedModel,
-          verbatim,
-        });
+        setDraft({ ...d, usedModel, verbatim });
       })
-      .catch((error) => {
-        console.error("[checkin] draftToday failed:", error);
-        setSummary("");
-        setDraft(null);
-      })
+      .catch(() => setDraft(null))
       .finally(() => setDrafting(false));
-  }, [current?.field, answers]);
+  }, [atSummary]);
 
-  const answerText = (text: string) => {
-    if (!current) return;
-
-    switch (current.field) {
-      case "mood": {
-        const mood = (Object.keys(MOOD_LABELS) as unknown as Mood[]).find(
-          (m) => MOOD_LABELS[m] === text,
-        );
-        setAnswers((a) => ({ ...a, mood: mood ?? null }));
-        break;
-      }
-      case "highlight":
-        setAnswers((a) => ({ ...a, highlight: text }));
-        break;
-      case "outside":
-        setAnswers((a) => ({ ...a, outside: text === "Yep" }));
-        break;
-      case "gratitude":
-        setAnswers((a) => ({ ...a, gratitude: text }));
-        break;
-      case "open":
-        setAnswers((a) => ({ ...a, open: text }));
-        break;
-      default:
-        break;
-    }
-
-    advance({ from: "user", kind: "text", text });
-  };
-
-  const sendInput = () => {
-    const text = inputText.trim();
-    if (!text || !current) return;
-    answerText(text);
-  };
-
-  const addPhoto = () => {
-    advance({ from: "user", kind: "photo", caption: CANNED_PHOTO_CAPTION });
-  };
-
-  const skip = () => advance(null);
+  useEffect(() => {
+    const el = chatRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, typing]);
 
   const keepDay = async () => {
     if (saving || drafting) return;
     setSaving(true);
     setSaveError(null);
 
-    const tags = [...new Set([...(draft?.tags ?? []), ...(answers.outside ? ["Outside"] : [])])];
+    const namesAnchor = anchors["a004"] ?? "";
+    const people = [
+      ...new Set([
+        ...(draft?.people ?? []),
+        ...namesAnchor.split(",").map((n) => n.trim()).filter(Boolean),
+      ]),
+    ];
 
     const result = await saveCheckin({
-      mood: answers.mood,
-      title: draft?.title ?? answers.highlight,
+      mood,
+      anchors,
+      promptAnswers: answers,
+      title: draft?.title ?? null,
       summary,
       summaryDraft: draft?.summary ?? "",
-      gratitude: answers.gratitude,
-      tags: tags.slice(0, 4),
-      people: draft?.people ?? [],
+      gratitude: null,
+      tags: (draft?.tags ?? []).slice(0, 4),
+      people,
       voiceDurationSeconds: null,
     });
 
@@ -324,18 +246,14 @@ export function Checkin({
       setSaving(false);
       return;
     }
-
     router.refresh();
     router.push(`/entry/${result.id}`);
   };
 
-  useEffect(() => {
-    const el = chatRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typing]);
-
-  const progress = Math.round((step / script.length) * 100);
-  const counter = `${Math.min(step + 1, script.length)}/${script.length}`;
+  const total = steps.length + 1;
+  const progress = Math.round((index / total) * 100);
+  const counter = `${Math.min(index + 1, total)}/${total}`;
+  const kind = dockStep?.prompt.response_type;
 
   return (
     <div className={styles.root}>
@@ -357,35 +275,20 @@ export function Checkin({
       </header>
 
       <div className={styles.chat} ref={chatRef} role="log" aria-live="polite">
-        {messages.map((message) => (
+        {messages.map((m) => (
           <div
-            key={message.id}
+            key={m.id}
             className={`${styles.row} ks-animate-in ${
-              message.from === "bot" ? styles.fromBot : styles.fromUser
+              m.from === "bot" ? styles.fromBot : styles.fromUser
             }`}
           >
-            {message.from === "bot" && message.adaptiveNote ? (
-              <div className={styles.adaptiveNote}>{message.adaptiveNote}</div>
-            ) : null}
-
-            {message.kind === "text" ? (
-              <div
-                className={`${styles.bubble} ${
-                  message.from === "bot" ? styles.bubbleBot : styles.bubbleUser
-                }`}
-              >
-                {message.text}
-              </div>
-            ) : null}
-
-            {message.kind === "photo" ? (
-              <div className={styles.photoCard}>
-                <div className={styles.photoArea}>
-                  <span className={styles.photoTag}>photo placeholder</span>
-                </div>
-                <div className={styles.photoCaption}>{message.caption}</div>
-              </div>
-            ) : null}
+            <div
+              className={`${styles.bubble} ${
+                m.from === "bot" ? styles.bubbleBot : styles.bubbleUser
+              }`}
+            >
+              {m.text}
+            </div>
           </div>
         ))}
 
@@ -399,50 +302,85 @@ export function Checkin({
       </div>
 
       <div className={styles.dock}>
-        {dockStep?.kind === "chips" ? (
-          <div className={styles.chips}>
-            {dockStep.chips?.map((label) => (
+        {kind === "scale_0_10" ? (
+          <div className={styles.scale} role="group" aria-label={dockStep?.prompt.text}>
+            {SCALE.map((n) => (
               <button
-                key={label}
+                key={n}
                 type="button"
-                className={styles.chip}
-                onClick={() => answerText(label)}
+                className={styles.scaleButton}
+                onClick={() => answer(String(n))}
               >
-                {label}
+                {n}
               </button>
             ))}
           </div>
         ) : null}
 
-        {dockStep?.kind === "text" ? (
+        {kind === "people_picker" ? (
           <div>
-            {dockStep.chips?.length ? (
+            {knownPeople.length > 0 ? (
               <div className={styles.suggestions}>
-                {dockStep.chips.map((label) => (
+                {knownPeople.map((name) => (
                   <button
-                    key={label}
+                    key={name}
                     type="button"
-                    className={styles.suggestion}
-                    onClick={() => answerText(label)}
+                    className={`${styles.suggestion} ${
+                      picked.includes(name) ? styles.suggestionOn : ""
+                    }`}
+                    aria-pressed={picked.includes(name)}
+                    onClick={() =>
+                      setPicked((p) =>
+                        p.includes(name) ? p.filter((x) => x !== name) : [...p, name],
+                      )
+                    }
                   >
-                    {label}
+                    {name}
                   </button>
                 ))}
               </div>
             ) : null}
             <div className={styles.textRow}>
-              {dockStep.multiline ? (
+              <input
+                className={styles.input}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder={dockStep?.placeholder ?? "Names, separated by commas"}
+                aria-label={dockStep?.prompt.text}
+              />
+              <button
+                type="button"
+                className={styles.send}
+                aria-label="Send"
+                onClick={() => {
+                  const typed = inputText
+                    .split(",")
+                    .map((n) => n.trim())
+                    .filter(Boolean);
+                  const all = [...new Set([...picked, ...typed])];
+                  answer(all.length ? all.join(", ") : null);
+                }}
+              >
+                &rarr;
+              </button>
+            </div>
+            <button type="button" className={styles.skip} onClick={() => answer(null)}>
+              Nobody today
+            </button>
+          </div>
+        ) : null}
+
+        {kind === "single_word" || kind === "short_text" || kind === "long_text" ? (
+          <div>
+            <div className={styles.textRow}>
+              {kind === "long_text" ? (
                 <textarea
                   className={styles.multiline}
                   rows={3}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter makes a new line here; the send button submits.
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendInput();
-                  }}
-                  placeholder={dockStep.placeholder ?? "Type your answer"}
-                  aria-label={dockStep.question}
+                  placeholder={dockStep?.placeholder ?? "Type your answer"}
+                  aria-label={dockStep?.prompt.text}
                 />
               ) : (
                 <input
@@ -450,66 +388,31 @@ export function Checkin({
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") sendInput();
+                    if (e.key === "Enter" && inputText.trim()) answer(inputText.trim());
                   }}
-                  placeholder={dockStep.placeholder ?? "Type your answer"}
-                  aria-label={dockStep.question}
+                  placeholder={dockStep?.placeholder ?? "Type your answer"}
+                  aria-label={dockStep?.prompt.text}
                 />
               )}
               <button
                 type="button"
                 className={styles.send}
-                onClick={sendInput}
                 disabled={!inputText.trim()}
                 aria-label="Send"
+                onClick={() => answer(inputText.trim())}
               >
                 &rarr;
               </button>
             </div>
-            {dockStep.field === "gratitude" || dockStep.field === "open" ? (
-              <button type="button" className={styles.skip} onClick={skip}>
+            {!dockStep?.isAnchor ? (
+              <button type="button" className={styles.skip} onClick={() => answer(null)}>
                 Skip this one
               </button>
             ) : null}
           </div>
         ) : null}
 
-        {dockStep?.kind === "yesno" ? (
-          <div className={styles.yesno}>
-            <button
-              type="button"
-              className={styles.no}
-              onClick={() => answerText("Nope")}
-            >
-              Nope
-            </button>
-            <button
-              type="button"
-              className={styles.yes}
-              onClick={() => answerText("Yep")}
-            >
-              Yep
-            </button>
-          </div>
-        ) : null}
-
-        {dockStep?.kind === "photo" ? (
-          <div className={styles.photoDock}>
-            <div className={styles.photoRow}>
-              <button type="button" className={styles.photoOutline} onClick={addPhoto}>
-                Take one
-              </button>
-              <button type="button" className={styles.photoPrimary} onClick={addPhoto}>
-                From camera roll
-              </button>
-            </div>
-            <button type="button" className={styles.skip} onClick={skip}>
-              No photo today
-            </button>
-          </div>
-        ) : null}
-
-        {dockStep?.kind === "summary" ? (
+        {atSummary ? (
           <div className={styles.summaryDock}>
             <textarea
               className={styles.textarea}
@@ -518,17 +421,13 @@ export function Checkin({
               onChange={(e) => setSummary(e.target.value)}
               placeholder={drafting ? "" : "Write the day in a line or two"}
               disabled={drafting}
-              aria-label="Your day in three lines"
+              aria-label="Your day"
             />
             {drafting ? (
-              <div className={styles.draftNote}>Writing your day&hellip;</div>
+              <div className={styles.draftNote}>Putting the day together&hellip;</div>
             ) : draft?.verbatim ? (
               <div className={styles.draftNote}>
                 Your own words are at the end, exactly as you wrote them.
-              </div>
-            ) : draft && !draft.usedModel ? (
-              <div className={styles.draftNote}>
-                Put together from your answers. Edit it into your own words.
               </div>
             ) : null}
             {saveError ? (

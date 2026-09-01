@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { longDate, MOOD_LABELS, type Entry } from "@/app/lib/entries";
+import { longDate, type Entry } from "@/app/lib/entries";
 import styles from "./EntryCard.module.css";
 
 /**
@@ -26,7 +26,7 @@ export function EntryCard({
       <div className={styles.text}>
         <div className={styles.meta}>
           {longDate(entry.entryDate)}
-          {entry.mood !== null ? ` · ${MOOD_LABELS[entry.mood]}` : ""}
+          {entry.mood !== null ? ` · ${entry.mood}/10` : ""}
         </div>
         <div className={styles.title}>{entry.title}</div>
       </div>

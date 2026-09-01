@@ -4,16 +4,22 @@
  * this module for real queries without touching the screens.
  */
 
-/** Stored as smallint 1-5. Labels live here, not in the database. */
-export type Mood = 1 | 2 | 3 | 4 | 5;
+/**
+ * Anchor a001, 0 to 10, day-scoped Cantril Ladder.
+ *
+ * Was a 1-5 scale with word labels. The spec calls for 0-10 so the series is
+ * comparable with national survey data, and the words are gone: a number the
+ * writer chose is not improved by the app naming it for them.
+ */
+export type Mood = number;
 
-export const MOOD_LABELS: Record<Mood, string> = {
-  1: "Rough",
-  2: "Meh",
-  3: "Steady",
-  4: "Good",
-  5: "Great",
-};
+/** Coarse label for a score, used only where a word reads better than a digit. */
+export function moodLabel(mood: Mood): string {
+  if (mood >= 8) return "A good one";
+  if (mood >= 6) return "Steady";
+  if (mood >= 4) return "Mixed";
+  return "Hard";
+}
 
 export type Entry = {
   id: string;

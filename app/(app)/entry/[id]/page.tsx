@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Screen } from "@/app/components/AppShell";
 import { BackButton } from "@/app/components/BackButton";
 import { STATIC_BARS } from "@/app/lib/checkin";
-import { formatDuration, longDate, MOOD_LABELS, weekdayName } from "@/app/lib/entries";
+import { formatDuration, longDate, moodLabel, weekdayName } from "@/app/lib/entries";
 import { getEntry } from "@/app/lib/queries";
 import styles from "../entry.module.css";
 
@@ -34,7 +34,9 @@ export default async function EntryPage({
         {entry.mood !== null || entry.tags.length > 0 ? (
           <div className={styles.pills}>
             {entry.mood !== null ? (
-              <span className={styles.moodPill}>{MOOD_LABELS[entry.mood]}</span>
+              <span className={styles.moodPill}>
+                {entry.mood}/10 · {moodLabel(entry.mood)}
+              </span>
             ) : null}
             {entry.tags.map((tag) => (
               <span key={tag} className={styles.tagPill}>

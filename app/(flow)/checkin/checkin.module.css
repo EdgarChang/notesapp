@@ -441,3 +441,43 @@
   border-radius: 6px;
   background: var(--bg-1);
 }
+
+/* ---------- 0 to 10 anchor scale ----------
+   Eleven taps have to fit a 452px column without wrapping into a wall, so they
+   flex down rather than holding a 44px target. The row is one tap deep and the
+   labels are the whole hit area, which keeps it usable. */
+
+.scale {
+  display: flex;
+  gap: 4px;
+}
+
+.scaleButton {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 0;
+  border-radius: 3px;
+  border: 1.5px solid var(--tint-200);
+  background: var(--tint-50);
+  color: var(--brand-text);
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+
+.scaleButton:hover {
+  background: var(--tint-100);
+}
+
+.scaleButton:active {
+  transform: scale(0.96);
+}
+
+/* Selected name on the people anchor. */
+.suggestionOn {
+  background: var(--bg-brand);
+  border-color: transparent;
+  color: var(--fg-inverse);
+}

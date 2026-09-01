@@ -1,0 +1,528 @@
+{
+  "version": "1.0.0",
+  "notes": "Prompt bank for daily journal app. See JOURNAL_SPEC.md for selection rules and guardrails. IDs are stable and must never be reused or renumbered. Anchor text must not be edited after launch without incrementing prompt_version.",
+  "anchors": [
+    {
+      "id": "a001",
+      "text": "On a scale of 0 to 10, how was today?",
+      "cadence": "anchor",
+      "response_type": "scale_0_10",
+      "category": "anchor",
+      "tone": "neutral",
+      "valence": "neutral",
+      "source": "Cantril Ladder, day-scoped"
+    },
+    {
+      "id": "a002",
+      "text": "How did you feel today, in one word?",
+      "cadence": "anchor",
+      "response_type": "single_word",
+      "category": "anchor",
+      "tone": "neutral",
+      "valence": "mixed",
+      "source": "affect label"
+    },
+    {
+      "id": "a003",
+      "text": "Did the things you did today feel worthwhile?",
+      "cadence": "anchor",
+      "response_type": "scale_0_10",
+      "category": "anchor",
+      "tone": "neutral",
+      "valence": "neutral",
+      "source": "ONS4 item 2"
+    },
+    {
+      "id": "a004",
+      "text": "Who did you spend time with today?",
+      "cadence": "anchor",
+      "response_type": "people_picker",
+      "category": "anchor",
+      "tone": "neutral",
+      "valence": "neutral",
+      "source": "social contact log"
+    }
+  ],
+  "pool": [
+    {
+      "id": "d001",
+      "text": "What were the three chapters of today? Give each one a title.",
+      "category": "day_reconstruction",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "reflective",
+      "valence": "neutral"
+    },
+    {
+      "id": "d002",
+      "text": "What was the best twenty minutes?",
+      "category": "day_reconstruction",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "day_bias": "weekend",
+      "tone": "reflective",
+      "valence": "positive"
+    },
+    {
+      "id": "d003",
+      "text": "What was the worst twenty minutes, and is it going to matter in a month?",
+      "category": "day_reconstruction",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "probing",
+      "valence": "negative"
+    },
+    {
+      "id": "d004",
+      "text": "Where were you when you felt most like yourself today?",
+      "category": "day_reconstruction",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "reflective",
+      "valence": "positive"
+    },
+    {
+      "id": "d005",
+      "text": "What did you do today that you'd do again tomorrow if nobody was watching?",
+      "category": "day_reconstruction",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "playful",
+      "valence": "positive"
+    },
+
+    {
+      "id": "e001",
+      "text": "What did you eat, and was it any good?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "day_bias": "weekday",
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+    {
+      "id": "e002",
+      "text": "What's the last thing that made you laugh out loud?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "tone": "playful",
+      "valence": "positive"
+    },
+    {
+      "id": "e003",
+      "text": "What song, show, or book were you in the middle of today?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+    {
+      "id": "e004",
+      "text": "Who did you text the most today, and about what?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+    {
+      "id": "e005",
+      "text": "What was the weather doing, and did you dress correctly for it?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "neutral"
+    },
+    {
+      "id": "e006",
+      "text": "What did you spend money on?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "day_bias": "weekday",
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+    {
+      "id": "e007",
+      "text": "What was open on your laptop that you didn't want to be looking at?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "day_bias": "weekday",
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "e008",
+      "text": "Quote someone. Anything anyone said today that stuck.",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+    {
+      "id": "e009",
+      "text": "What did today smell like?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "playful",
+      "valence": "neutral"
+    },
+    {
+      "id": "e010",
+      "text": "What did you say out loud to nobody?",
+      "category": "ephemera",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+
+    {
+      "id": "s001",
+      "text": "Who made your day easier today?",
+      "category": "social",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "tone": "reflective",
+      "valence": "positive"
+    },
+    {
+      "id": "s002",
+      "text": "Did you make anyone's day easier?",
+      "category": "social",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "reflective",
+      "valence": "positive"
+    },
+    {
+      "id": "s003",
+      "text": "Who did you think about but not contact?",
+      "category": "social",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "reflective",
+      "valence": "mixed"
+    },
+    {
+      "id": "s004",
+      "text": "Was there a moment today where you felt genuinely understood?",
+      "category": "social",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "reflective",
+      "valence": "positive"
+    },
+    {
+      "id": "s005",
+      "text": "Who do you owe a message to?",
+      "category": "social",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "neutral",
+      "valence": "neutral"
+    },
+
+    {
+      "id": "m001",
+      "text": "What did you learn today, however small or stupid?",
+      "category": "meaning",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "playful",
+      "valence": "positive",
+      "source": "Ryff: personal growth"
+    },
+    {
+      "id": "m002",
+      "text": "What did you get better at?",
+      "category": "meaning",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "reflective",
+      "valence": "positive",
+      "source": "Ryff: personal growth"
+    },
+    {
+      "id": "m003",
+      "text": "Did you choose today, or did today choose you?",
+      "category": "meaning",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "probing",
+      "valence": "mixed",
+      "source": "Ryff: autonomy"
+    },
+    {
+      "id": "m004",
+      "text": "What did you say no to?",
+      "category": "meaning",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "reflective",
+      "valence": "neutral",
+      "source": "Ryff: autonomy"
+    },
+    {
+      "id": "m005",
+      "text": "What did you do today that the version of you from five years ago couldn't have done?",
+      "category": "meaning",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "reflective",
+      "valence": "positive",
+      "source": "Ryff: self-acceptance, growth"
+    },
+
+    {
+      "id": "p001",
+      "text": "Rate today as a movie. Genre, star rating, would you rewatch?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p002",
+      "text": "If today had a soundtrack, what was playing?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "neutral"
+    },
+    {
+      "id": "p003",
+      "text": "What was today's boss battle?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "day_bias": "weekday",
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p004",
+      "text": "Today's plot twist?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p005",
+      "text": "What was your unnecessary main character moment?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "positive"
+    },
+    {
+      "id": "p006",
+      "text": "Name today like a weather forecast. (\"Overcast with scattered admin.\")",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p007",
+      "text": "What would today's headline be, in a newspaper only you read?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p008",
+      "text": "Petty grievance of the day. Get it out of your system.",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "playful",
+      "valence": "negative"
+    },
+    {
+      "id": "p009",
+      "text": "What did Past You get wrong about today?",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 2,
+      "tone": "playful",
+      "valence": "mixed"
+    },
+    {
+      "id": "p010",
+      "text": "One thing you want Future You to know about right now.",
+      "category": "playful",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 4,
+      "tone": "reflective",
+      "valence": "positive"
+    },
+
+    {
+      "id": "f001",
+      "text": "What are you worried about right now?",
+      "category": "future_facing",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 3,
+      "tone": "probing",
+      "valence": "negative",
+      "resurface_value": "high"
+    },
+    {
+      "id": "f002",
+      "text": "What are you looking forward to?",
+      "category": "future_facing",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "tone": "reflective",
+      "valence": "positive",
+      "closer_eligible": true
+    },
+    {
+      "id": "f003",
+      "text": "What's something ordinary about today that you assume will always be true?",
+      "category": "future_facing",
+      "cadence": "daily_pool",
+      "response_type": "short_text",
+      "weight": 5,
+      "tone": "reflective",
+      "valence": "positive",
+      "closer_eligible": true,
+      "resurface_value": "highest",
+      "notes": "Highest-value prompt in the bank for the memory-preservation goal. The things people most want back are the ones they never recorded because they seemed permanent."
+    }
+  ],
+  "weekly": [
+    {
+      "id": "w001",
+      "text": "What changed this week that you didn't notice while it was happening?",
+      "category": "meaning",
+      "cadence": "weekly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "neutral"
+    },
+    {
+      "id": "w002",
+      "text": "What are you still avoiding?",
+      "category": "meaning",
+      "cadence": "weekly",
+      "response_type": "long_text",
+      "tone": "probing",
+      "valence": "negative"
+    },
+    {
+      "id": "w003",
+      "text": "Who did you see more of this week than usual, and who less?",
+      "category": "social",
+      "cadence": "weekly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "neutral"
+    },
+    {
+      "id": "w004",
+      "text": "What was the best hour of the week?",
+      "category": "day_reconstruction",
+      "cadence": "weekly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "positive",
+      "closer_eligible": true
+    }
+  ],
+  "monthly": [
+    {
+      "id": "mo001",
+      "text": "Who entered or left your life this month?",
+      "category": "social",
+      "cadence": "monthly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "mixed"
+    },
+    {
+      "id": "mo002",
+      "text": "What did you believe a month ago that you no longer believe?",
+      "category": "meaning",
+      "cadence": "monthly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "neutral"
+    },
+    {
+      "id": "mo003",
+      "text": "Describe your current life in a sentence, as if writing to a stranger.",
+      "category": "meaning",
+      "cadence": "monthly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "neutral",
+      "resurface_value": "highest"
+    },
+    {
+      "id": "mo004",
+      "text": "What's one thing about your daily routine right now that will be gone in five years?",
+      "category": "future_facing",
+      "cadence": "monthly",
+      "response_type": "long_text",
+      "tone": "reflective",
+      "valence": "positive",
+      "closer_eligible": true,
+      "resurface_value": "highest"
+    }
+  ]
+}

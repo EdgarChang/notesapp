@@ -21,18 +21,20 @@ export type WeeklyNote = {
   gratitudeQuotes: { text: string; date: string }[];
 };
 
-/** Which of the three mood colours a value maps to. */
+/**
+ * Which of the three mood colours a score maps to, on the 0-10 anchor scale.
+ *
+ * The thresholds moved with the scale. Left at the old 1-5 cut points, a 4 out
+ * of 10 would have been coloured as a good day.
+ */
 export function moodTone(mood: Mood): "high" | "mid" | "low" {
-  if (mood >= 4) return "high";
-  if (mood >= 3) return "mid";
+  if (mood >= 7) return "high";
+  if (mood >= 4) return "mid";
   return "low";
 }
 
-/**
- * Bar height in px. Matches the prototype's `18 + value * 15`, so a 5 reaches
- * 93px in a 90px track and deliberately overshoots the top by 3px.
- */
+/** Bar height in px, scaled so a 10 fills the 90px track without overflowing. */
 export function moodBarHeight(mood: Mood): number {
-  return 18 + mood * 15;
+  return 18 + mood * 7;
 }
 

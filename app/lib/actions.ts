@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { todayIso } from "./entries";
-import type { ScriptStep } from "./checkin";
+import type { Step } from "./checkin";
+import { PROMPT_VERSION } from "./prompts";
 import {
   composeFallbackDraft,
   draftDay,
@@ -21,8 +22,20 @@ import {
 } from "./queries";
 import { createClient } from "./supabase/server";
 
+export type PromptAnswer = {
+  promptId: string;
+  responseType: string;
+  /** Null when the prompt was shown and skipped. */
+  value: string | null;
+};
+
 export type CheckinInput = {
+  /** Anchor a001, 0 to 10. The trend line. */
   mood: number | null;
+  /** The other anchors, keyed by prompt id. */
+  anchors: Record<string, string>;
+  /** Every rotating prompt shown tonight, answered or skipped. */
+  promptAnswers: PromptAnswer[];
   title: string | null;
   /** What the user kept after editing. */
   summary: string;
@@ -79,6 +92,16 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
         user_id: user.id,
         entry_date: todayIso(),
         mood: input.mood,
+        anchor_responses: input.anchors,
+        prompt_responses: input.promptAnswers.map((a) => ({
+          prompt_id: a.promptId,
+          // Stored per response: prompt text will drift, and answers must stay
+          // interpretable against the wording that produced them.
+          prompt_version: PROMPT_VERSION,
+          response_type: a.responseType,
+          value: a.value,
+          skipped: a.value === null,
+        })),
         title: input.title,
         summary: input.summary,
         summary_draft: input.summaryDraft,
@@ -93,6 +116,24 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
     .single();
 
   if (error) return { ok: false, error: error.message };
+
+  // What was shown tonight, answered or not. Skipping is recorded separately
+  // from never-shown, because repeated skipping is a signal to down-weight.
+  if (input.promptAnswers.length > 0) {
+    const { error: historyError } = await supabase.from("prompt_history").upsert(
+      input.promptAnswers.map((a) => ({
+        user_id: user.id,
+        prompt_id: a.promptId,
+        shown_on: todayIso(),
+        answered: a.value !== null,
+        skipped: a.value === null,
+      })),
+      { onConflict: "user_id,prompt_id,shown_on" },
+    );
+    if (historyError) {
+      console.error("[actions] prompt_history:", historyError.message);
+    }
+  }
 
   revalidatePath("/");
   revalidatePath("/timeline");
@@ -140,7 +181,7 @@ export async function draftToday(
  * the model. Falls back to the written step and its written acknowledgement.
  */
 export async function nextQuestion(
-  step: ScriptStep,
+  step: Step,
   answers: CheckinAnswers,
   askedTonight: string[] = [],
   previousAnswer: string | null = null,
@@ -150,7 +191,7 @@ export async function nextQuestion(
    * would acknowledge the wrong answer.
    */
   fallbackAck = "",
-): Promise<{ step: ScriptStep; acknowledgement: string }> {
+): Promise<{ step: Step; acknowledgement: string }> {
   const fallback = { step, acknowledgement: fallbackAck };
   try {
     const context = await getPickerContext();

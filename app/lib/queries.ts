@@ -1,4 +1,5 @@
 import "server-only";
+import { NO_REPEAT_DAYS } from "./selection";
 import {
   dayOfWeek,
   daysInMonth,
@@ -75,13 +76,15 @@ export type Profile = {
   assistantTone: "Playful" | "Brief";
   reminderTime: string | null;
   onboardedAt: string | null;
+  /** 0 = Sunday. The weekly prompt tier fires on this day. */
+  weeklyPromptDay: number;
 };
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name, assistant_tone, reminder_time, onboarded_at")
+    .select("display_name, assistant_tone, reminder_time, onboarded_at, weekly_prompt_day")
     .maybeSingle();
   failed("getProfile", error);
 
@@ -91,6 +94,7 @@ export async function getProfile(): Promise<Profile | null> {
     assistantTone: data.assistant_tone === "Brief" ? "Brief" : "Playful",
     reminderTime: data.reminder_time,
     onboardedAt: data.onboarded_at,
+    weeklyPromptDay: data.weekly_prompt_day ?? 0,
   };
 }
 
@@ -431,5 +435,61 @@ export async function getRetrospect(
     headline: data.headline,
     narrative: data.narrative,
     moments: (data.moments ?? []) as Moment[],
+  };
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Choosing tonight's prompts
+ * ------------------------------------------------------------------------- */
+
+/** Everything the selection algorithm needs about this person's history. */
+export async function getSelectionContext(today: string): Promise<{
+  recentlyShown: string[];
+  oftenSkipped: string[];
+  entryCount: number;
+  monthlyDue: boolean;
+  knownPeople: string[];
+}> {
+  const supabase = await createClient();
+
+  const since = new Date(`${today}T00:00:00Z`);
+  since.setUTCDate(since.getUTCDate() - NO_REPEAT_DAYS);
+  const sinceIso = since.toISOString().slice(0, 10);
+
+  const [{ data: recent }, { data: history }, { count }, people] = await Promise.all([
+    supabase
+      .from("prompt_history")
+      .select("prompt_id")
+      .gte("shown_on", sinceIso),
+    supabase.from("prompt_history").select("prompt_id, answered, skipped"),
+    supabase.from("entries").select("id", { count: "exact", head: true }),
+    getTopPeople(6),
+  ]);
+
+  // Skipped more often than answered. Down-weighted rather than barred, since a
+  // prompt someone skips on a Tuesday may land on a Sunday.
+  const tally = new Map<string, { answered: number; skipped: number }>();
+  for (const row of history ?? []) {
+    const t = tally.get(row.prompt_id) ?? { answered: 0, skipped: 0 };
+    if (row.answered) t.answered++;
+    if (row.skipped) t.skipped++;
+    tally.set(row.prompt_id, t);
+  }
+
+  const { d } = { d: Number(today.slice(8, 10)) };
+  const lastOfMonth = daysInMonth(today);
+
+  return {
+    recentlyShown: [...new Set((recent ?? []).map((r) => r.prompt_id as string))],
+    oftenSkipped: [...tally.entries()]
+      .filter(([, t]) => t.skipped > t.answered)
+      .map(([id]) => id),
+    entryCount: count ?? 0,
+    // The monthly tier fires on the last day of the month. A user who never
+    // opens the app that day simply misses it; catching up would mean asking a
+    // month-shaped question about a month that has already ended.
+    monthlyDue: d === lastOfMonth,
+    knownPeople: people.map((p) => p.name),
   };
 }

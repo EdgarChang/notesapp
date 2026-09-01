@@ -2,9 +2,9 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { ScriptStep, StepField } from "./checkin";
+import type { Step } from "./checkin";
 import type { Moment } from "./retrospect";
-import { MOOD_LABELS, type Mood } from "./entries";
+import { moodLabel, type Mood } from "./entries";
 
 /**
  * The provider seam. Everything the app knows about drafting lives behind
@@ -71,7 +71,7 @@ Rules:
 function buildDraftContent(answers: CheckinAnswers): string {
   const lines: string[] = [];
   if (answers.mood !== null) {
-    lines.push(`How the day landed: ${MOOD_LABELS[answers.mood]}`);
+    lines.push(`How the day landed: ${answers.mood} out of 10 (${moodLabel(answers.mood)})`);
   }
   if (answers.highlight) {
     lines.push(`Worth remembering: ${answers.highlight}`);
@@ -227,25 +227,6 @@ const NextQuestionSchema = z.object({
   adaptiveNote: z.string().nullable(),
 });
 
-/**
- * What each step must still ask after rewording.
- *
- * Without this the model drifts: it turned the photo step into "What's one
- * moment from today you want to hold onto?", which no longer asks for a photo
- * while the controls below it still offered camera and camera roll.
- */
-const FIELD_PURPOSE: Record<StepField, string> = {
-  mood: "How the day felt overall. The five chips are a stored 1-5 scale and must be returned unchanged.",
-  highlight: "The one thing from today worth remembering in a year.",
-  outside: "Whether they got outside today. Must be answerable with yes or no.",
-  gratitude: "What they were grateful for today.",
-  open: "An open invitation to write whatever they want about today, in as much or as little detail as they like. Not a specific question, and never narrow it to one topic.",
-  photo:
-    "Adding a photo from today. The question must explicitly ask for a photo, because the controls below it offer camera and camera roll.",
-  summary:
-    "Introducing the text shown below, which they can edit. If they wrote their own account of the day earlier, this is their own words rather than a draft, so introduce it that way. Not a question about their day.",
-};
-
 const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in so it fits the person being asked.
 
 You are given the step's fixed purpose, what they have already said tonight, and a little history. You may change the wording, the chip labels, and whether to show an adaptive note. You may not change what the step is for.
@@ -267,19 +248,19 @@ question:
 Rules:
 - The question must still ask for exactly what \`mustAsk\` describes. If your rewording no longer asks for that thing, it is wrong, however well it reads.
 - Do not reuse the framing of a question already asked tonight. Two steps asking what they want to "hold onto" is a failure.
-- chips: for a mood step, return the five labels unchanged and in order, since they map to a stored 1-5 scale. For a text step these are optional tap-to-answer suggestions, so each one must read as a short answer the person could plausibly give tonight, not as a category label: "Lunch with Sam" works, "Friends" does not. Draw them from their recent entry titles and the people they name. Focus topics tell you what they care about but are not themselves answers. Return an empty array unless you can offer something specific and true, which for someone with little history means returning none.
+- chips: return an empty array. Suggestions are not offered for these prompts.
 - adaptiveNote: set it only when history gives you something specific and true to point at, like a name or a topic that keeps recurring. Otherwise null. Never invent a pattern.
 - Refer to tonight's answers only if it makes the question better. Do not restate them back.`;
 
 function buildPickerContent(
-  step: ScriptStep,
+  step: Step,
   context: PickerContext,
   answers: CheckinAnswers,
   asked: string[],
   previousAnswer: string | null,
 ): string {
   const said: string[] = [];
-  if (answers.mood !== null) said.push(`mood: ${MOOD_LABELS[answers.mood]}`);
+  if (answers.mood !== null) said.push(`mood: ${answers.mood}/10`);
   if (answers.highlight) said.push(`worth remembering: ${answers.highlight}`);
   if (answers.outside !== null) said.push(`got outside: ${answers.outside ? "yes" : "no"}`);
   if (answers.gratitude) said.push(`grateful for: ${answers.gratitude}`);
@@ -287,10 +268,9 @@ function buildPickerContent(
   return JSON.stringify(
     {
       step: {
-        mustAsk: FIELD_PURPOSE[step.field],
-        format: step.kind,
-        currentQuestion: step.question,
-        currentChips: step.chips ?? [],
+        mustAsk: step.prompt.text,
+        category: step.prompt.category,
+        answerFormat: step.prompt.response_type,
       },
       previousAnswer: previousAnswer ?? null,
       alreadyAskedTonight: asked,
@@ -313,13 +293,16 @@ function buildPickerContent(
  * gratitude never asked, quietly emptying the Insights screen.
  */
 export async function pickNextQuestion(
-  step: ScriptStep,
+  step: Step,
   context: PickerContext,
   answers: CheckinAnswers,
   askedTonight: string[] = [],
   previousAnswer: string | null = null,
-): Promise<{ step: ScriptStep; acknowledgement: string } | null> {
+): Promise<{ step: Step; acknowledgement: string } | null> {
   if (!llmConfigured()) return null;
+  // Anchor wording is frozen. Rewording one would break comparability with
+  // every answer given to it before, which is the whole reason anchors exist.
+  if (step.isAnchor) return null;
 
   try {
     const client = new Anthropic();
@@ -351,22 +334,10 @@ export async function pickNextQuestion(
     const parsed = response.parsed_output;
     if (!parsed?.question.trim()) return null;
 
-    // The mood chips map to a stored 1-5 scale, so they are never model-chosen.
-    // Elsewhere they are optional suggestions: take up to three, and take none
-    // if the model offers none, since there is no fiction left to fall back to.
-    const chips =
-      step.field === "mood"
-        ? step.chips
-        : parsed.chips.map((c) => c.trim()).filter(Boolean).slice(0, 3);
-
     return {
       step: {
         ...step,
-        question: parsed.question.trim(),
-        ...(chips?.length ? { chips } : {}),
-        ...(parsed.adaptiveNote?.trim()
-          ? { adaptiveNote: parsed.adaptiveNote.trim() }
-          : {}),
+        prompt: { ...step.prompt, text: parsed.question.trim() },
       },
       acknowledgement: parsed.acknowledgement.trim(),
     };
