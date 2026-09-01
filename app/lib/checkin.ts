@@ -53,7 +53,9 @@ export function buildScript(tone: AssistantTone): ScriptStep[] {
       question: brief
         ? "One thing worth remembering?"
         : "One thing you’d want to remember about it in a year?",
-      chips: ["The 6am run", "Dinner with Maya", "Shipped the release"],
+      // No written suggestions. The prototype's were fiction about a 6am run and
+      // dinner with Maya; the picker proposes real ones from the person's own
+      // history, and offers none when there is no history to draw on.
       placeholder: "Type it in a line or two",
       ack: "That’s the one to keep.",
     },

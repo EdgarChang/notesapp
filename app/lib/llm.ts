@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import type { ScriptStep } from "./checkin";
 import { MOOD_LABELS, type Mood } from "./entries";
 
 /**
@@ -12,7 +13,15 @@ import { MOOD_LABELS, type Mood } from "./entries";
  * browser.
  */
 
-const MODEL = "claude-opus-5";
+/** Drafting: prose in the user's own voice, so quality is the product. */
+const DRAFT_MODEL = "claude-opus-5";
+
+/**
+ * Question picking: rewording a fixed step from a short context, with the user
+ * waiting. Cheap and fast is the right trade, and Haiku 4.5 predates the effort
+ * parameter, so this call omits both `effort` and `thinking`.
+ */
+const PICKER_MODEL = "claude-haiku-4-5";
 
 /** What the six steps collected. */
 export type CheckinAnswers = {
@@ -130,7 +139,7 @@ export async function draftDay(answers: CheckinAnswers): Promise<DayDraft | null
   try {
     const client = new Anthropic();
     const response = await client.messages.parse({
-      model: MODEL,
+      model: DRAFT_MODEL,
       max_tokens: 16000,
       thinking: { type: "adaptive" },
       output_config: {
@@ -155,6 +164,139 @@ export async function draftDay(answers: CheckinAnswers): Promise<DayDraft | null
       console.error(`[llm] draftDay API error ${error.status}: ${error.message}`);
     } else {
       console.error("[llm] draftDay failed:", error);
+    }
+    return null;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Question picking
+ * ------------------------------------------------------------------------- */
+
+/** What the picker knows about this person, beyond tonight's answers. */
+export type PickerContext = {
+  /** Chosen during onboarding. */
+  focusTopics: string[];
+  /** Titles of the last few entries, newest first. */
+  recentTitles: string[];
+  /** Names that keep coming up. */
+  recurringPeople: string[];
+};
+
+const NextQuestionSchema = z.object({
+  /** The question to ask, in the assistant's voice. */
+  question: z.string(),
+  /** Chip labels. Answers for a chips step, suggestions for a text step. */
+  chips: z.array(z.string()),
+  /**
+   * The "we keep asking because..." line, or null. Only worth setting when
+   * there is a real pattern to point at.
+   */
+  adaptiveNote: z.string().nullable(),
+});
+
+const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in so it fits the person being asked.
+
+You are given the step's fixed purpose, what they have already said tonight, and a little history. You may change the wording, the chip labels, and whether to show an adaptive note. You may not change what the step is for.
+
+Voice:
+- Warm, plain, direct. One sentence. A question, not a prompt.
+- Second person. No emoji, no exclamation marks, no therapy-speak.
+- Never congratulate them. Never refer to yourself as an AI or assistant.
+
+Rules:
+- Keep the question's purpose exactly. A mood question stays a mood question.
+- chips: for a mood step, return the five labels unchanged and in order, since they map to a stored 1-5 scale. For a text step these are optional tap-to-answer suggestions, so each one must read as a short answer the person could plausibly give tonight, not as a category label: "Lunch with Sam" works, "Friends" does not. Draw them from their recent entry titles and the people they name. Focus topics tell you what they care about but are not themselves answers. Return an empty array unless you can offer something specific and true, which for someone with little history means returning none.
+- adaptiveNote: set it only when history gives you something specific and true to point at, like a name or a topic that keeps recurring. Otherwise null. Never invent a pattern.
+- Refer to tonight's answers only if it makes the question better. Do not restate them back.`;
+
+function buildPickerContent(
+  step: ScriptStep,
+  context: PickerContext,
+  answers: CheckinAnswers,
+): string {
+  const said: string[] = [];
+  if (answers.mood !== null) said.push(`mood: ${MOOD_LABELS[answers.mood]}`);
+  if (answers.highlight) said.push(`worth remembering: ${answers.highlight}`);
+  if (answers.outside !== null) said.push(`got outside: ${answers.outside ? "yes" : "no"}`);
+  if (answers.gratitude) said.push(`grateful for: ${answers.gratitude}`);
+
+  return JSON.stringify(
+    {
+      step: {
+        purpose: step.field,
+        format: step.kind,
+        currentQuestion: step.question,
+        currentChips: step.chips ?? [],
+      },
+      tonightSoFar: said,
+      focusTopics: context.focusTopics,
+      recentEntryTitles: context.recentTitles,
+      recurringPeople: context.recurringPeople,
+    },
+    null,
+    1,
+  );
+}
+
+/**
+ * Reword one step for this person. Returns null on any failure, so the caller
+ * falls back to the written script.
+ *
+ * The step's `kind` and `field` are never model-chosen: each one maps to a
+ * stored column, and letting the model reshape the flow could leave mood or
+ * gratitude never asked, quietly emptying the Insights screen.
+ */
+export async function pickNextQuestion(
+  step: ScriptStep,
+  context: PickerContext,
+  answers: CheckinAnswers,
+): Promise<ScriptStep | null> {
+  if (!llmConfigured()) return null;
+  // The summary step shows a draft rather than asking anything.
+  if (step.field === "summary") return null;
+
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.parse(
+      {
+        model: PICKER_MODEL,
+        max_tokens: 2048,
+        output_config: { format: zodOutputFormat(NextQuestionSchema) },
+        system: PICKER_SYSTEM,
+        messages: [{ role: "user", content: buildPickerContent(step, context, answers) }],
+      },
+      // The user is watching a typing indicator. Past a few seconds the written
+      // question is the better answer.
+      { timeout: 4000 },
+    );
+
+    if (response.stop_reason === "refusal") return null;
+    const parsed = response.parsed_output;
+    if (!parsed?.question.trim()) return null;
+
+    // The mood chips map to a stored 1-5 scale, so they are never model-chosen.
+    // Elsewhere they are optional suggestions: take up to three, and take none
+    // if the model offers none, since there is no fiction left to fall back to.
+    const chips =
+      step.field === "mood"
+        ? step.chips
+        : parsed.chips.map((c) => c.trim()).filter(Boolean).slice(0, 3);
+
+    return {
+      ...step,
+      question: parsed.question.trim(),
+      ...(chips?.length ? { chips } : {}),
+      ...(parsed.adaptiveNote?.trim()
+        ? { adaptiveNote: parsed.adaptiveNote.trim() }
+        : {}),
+    };
+  } catch (error) {
+    if (error instanceof Anthropic.APIError) {
+      console.error(`[llm] pickNextQuestion ${error.status}: ${error.message}`);
+    } else {
+      console.error("[llm] pickNextQuestion failed:", error);
     }
     return null;
   }

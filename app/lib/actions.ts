@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { todayIso } from "./entries";
+import type { ScriptStep } from "./checkin";
 import {
   composeFallbackDraft,
   draftDay,
+  pickNextQuestion,
   type CheckinAnswers,
   type DayDraft,
 } from "./llm";
+import { getPickerContext } from "./queries";
 import { createClient } from "./supabase/server";
 
 export type CheckinInput = {
@@ -120,4 +123,25 @@ export async function recordPeople(names: string[]): Promise<void> {
     .eq("user_id", user.id);
 
   if (error) console.error("[actions] recordPeople:", error.message);
+}
+
+
+/**
+ * Reword one check-in step for this person, or hand back the written one.
+ *
+ * Always resolves to a usable step, so the check-in never stalls waiting on the
+ * model. The caller passes the written step, which is also the fallback.
+ */
+export async function nextQuestion(
+  step: ScriptStep,
+  answers: CheckinAnswers,
+): Promise<ScriptStep> {
+  try {
+    const context = await getPickerContext();
+    const picked = await pickNextQuestion(step, context, answers);
+    return picked ?? step;
+  } catch (error) {
+    console.error("[actions] nextQuestion:", error);
+    return step;
+  }
 }

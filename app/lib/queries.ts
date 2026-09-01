@@ -309,3 +309,37 @@ export async function getGratitudeQuotes(
 export function leadingBlanksFor(isoDate: string): number {
   return dayOfWeek(`${isoDate.slice(0, 8)}01`);
 }
+
+
+/** History the question picker uses to personalise a step. */
+export async function getPickerContext(): Promise<{
+  focusTopics: string[];
+  recentTitles: string[];
+  recurringPeople: string[];
+}> {
+  const supabase = await createClient();
+
+  const [{ data: profile }, { data: recent }] = await Promise.all([
+    supabase
+      .from("question_profiles")
+      .select("focus_topics, recurring_people")
+      .maybeSingle(),
+    supabase
+      .from("entries")
+      .select("title")
+      .not("title", "is", null)
+      .order("entry_date", { ascending: false })
+      .limit(5),
+  ]);
+
+  const people = (profile?.recurring_people ?? {}) as Record<string, number>;
+
+  return {
+    focusTopics: (profile?.focus_topics ?? []) as string[],
+    recentTitles: (recent ?? []).map((r) => r.title as string),
+    recurringPeople: Object.entries(people)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 5)
+      .map(([name]) => name),
+  };
+}

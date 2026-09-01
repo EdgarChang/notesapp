@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { draftToday, recordPeople, saveCheckin } from "@/app/lib/actions";
+import { draftToday, nextQuestion, recordPeople, saveCheckin } from "@/app/lib/actions";
 import {
   buildScript,
   CANNED_PHOTO_CAPTION,
   TIMING,
   type AssistantTone,
+  type ScriptStep,
 } from "@/app/lib/checkin";
 import { MOOD_LABELS, type Mood } from "@/app/lib/entries";
 import styles from "./checkin.module.css";
@@ -76,6 +77,19 @@ export function Checkin({
     gratitude: null,
   });
 
+  /**
+   * The step as asked. The picker may reword the question, the chips and the
+   * adaptive note, so the dock has to render this rather than the written
+   * script. Null while the next question is still being fetched.
+   */
+  const [activeStep, setActiveStep] = useState<ScriptStep | null>(null);
+
+  /** Lets askAt read the latest answers without becoming a changing dependency. */
+  const answersRef = useRef(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -99,23 +113,38 @@ export function Checkin({
     setMessages((prev) => [...prev, { ...message, id: nextId.current++ }]);
   }, []);
 
-  /** Assistant types, then asks question `index`. */
+  /**
+   * Assistant types, then asks question `index`.
+   *
+   * The typing indicator now covers a real request rather than a fixed delay:
+   * the picker rewords the step for this person, and whichever question arrives
+   * is shown once at least TIMING.typing has passed, so a fast reply does not
+   * flash past. nextQuestion always resolves, falling back to the written step.
+   */
   const askAt = useCallback(
     (index: number) => {
-      const next = script[index];
-      if (!next) return;
+      const base = script[index];
+      if (!base) return;
+
       setTyping(true);
-      later(() => {
-        setTyping(false);
-        push({
-          from: "bot",
-          kind: "text",
-          text: next.question,
-          ...(showAdaptiveNotes && next.adaptiveNote
-            ? { adaptiveNote: next.adaptiveNote }
-            : {}),
-        });
-      }, TIMING.typing);
+      setActiveStep(null);
+      const startedAt = Date.now();
+
+      void nextQuestion(base, answersRef.current).then((step) => {
+        const remaining = Math.max(0, TIMING.typing - (Date.now() - startedAt));
+        later(() => {
+          setTyping(false);
+          setActiveStep(step);
+          push({
+            from: "bot",
+            kind: "text",
+            text: step.question,
+            ...(showAdaptiveNotes && step.adaptiveNote
+              ? { adaptiveNote: step.adaptiveNote }
+              : {}),
+          });
+        }, remaining);
+      });
     },
     [script, showAdaptiveNotes, push, later],
   );
@@ -140,7 +169,16 @@ export function Checkin({
     [step, push, later, askAt],
   );
 
-  const current = script[step];
+  // The step as asked, falling back to the written one before it arrives.
+  const current = activeStep ?? script[step];
+  /**
+   * Controls appear only once the question has actually been asked.
+   *
+   * Previously the dock switched the instant `step` incremented, so a fast
+   * tapper could answer a question before seeing it, and with the picker in
+   * play the chip labels would visibly change under them.
+   */
+  const dockStep = !typing && activeStep !== null ? current : undefined;
 
   /**
    * Fetch the draft as soon as the summary step is reached, so the textarea is
@@ -311,9 +349,9 @@ export function Checkin({
       </div>
 
       <div className={styles.dock}>
-        {current?.kind === "chips" ? (
+        {dockStep?.kind === "chips" ? (
           <div className={styles.chips}>
-            {current.chips?.map((label) => (
+            {dockStep.chips?.map((label) => (
               <button
                 key={label}
                 type="button"
@@ -326,11 +364,11 @@ export function Checkin({
           </div>
         ) : null}
 
-        {current?.kind === "text" ? (
+        {dockStep?.kind === "text" ? (
           <div>
-            {current.chips?.length ? (
+            {dockStep.chips?.length ? (
               <div className={styles.suggestions}>
-                {current.chips.map((label) => (
+                {dockStep.chips.map((label) => (
                   <button
                     key={label}
                     type="button"
@@ -350,8 +388,8 @@ export function Checkin({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") sendInput();
                 }}
-                placeholder={current.placeholder ?? "Type your answer"}
-                aria-label={current.question}
+                placeholder={dockStep.placeholder ?? "Type your answer"}
+                aria-label={dockStep.question}
               />
               <button
                 type="button"
@@ -363,7 +401,7 @@ export function Checkin({
                 &rarr;
               </button>
             </div>
-            {current.field === "gratitude" ? (
+            {dockStep.field === "gratitude" ? (
               <button type="button" className={styles.skip} onClick={skip}>
                 Skip this one
               </button>
@@ -371,7 +409,7 @@ export function Checkin({
           </div>
         ) : null}
 
-        {current?.kind === "yesno" ? (
+        {dockStep?.kind === "yesno" ? (
           <div className={styles.yesno}>
             <button
               type="button"
@@ -390,7 +428,7 @@ export function Checkin({
           </div>
         ) : null}
 
-        {current?.kind === "photo" ? (
+        {dockStep?.kind === "photo" ? (
           <div className={styles.photoDock}>
             <div className={styles.photoRow}>
               <button type="button" className={styles.photoOutline} onClick={addPhoto}>
@@ -406,7 +444,7 @@ export function Checkin({
           </div>
         ) : null}
 
-        {current?.kind === "summary" ? (
+        {dockStep?.kind === "summary" ? (
           <div className={styles.summaryDock}>
             <textarea
               className={styles.textarea}

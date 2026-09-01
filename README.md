@@ -14,7 +14,7 @@ Mobile-first: a single 452px column centred on larger screens.
 | Data | Postgres via Supabase, owner-scoped with RLS |
 | Auth | Supabase Auth, email and password |
 | Media | Supabase Storage, private bucket, signed URLs (not yet wired) |
-| LLM | Claude API via `@anthropic-ai/sdk`, server-side only |
+| LLM | Claude API via `@anthropic-ai/sdk`, server-side only. Opus 5 drafts the day, Haiku 4.5 rewords questions |
 
 No Tailwind. The design is specified as exact pixel values over CSS custom
 properties, so tokens plus CSS Modules maps onto it directly. Tailwind would add a
@@ -94,8 +94,8 @@ Screens first against seeded data, backend second.
 4. **Done.** Entry detail, then Timeline, then Insights.
 5. **Done.** Onboarding.
 6. **Done.** Supabase project, schema, auth, RLS, then real queries.
-7. **Partly done.** Claude drafts the day's summary. The question picker is not
-   built, so the six questions are still a fixed script.
+7. **Done.** Claude drafts the day's summary (Opus 5) and rewords each question
+   for the person (Haiku 4.5).
 8. Media upload, then the weekly note job.
 
 ## Known facades
@@ -113,11 +113,9 @@ What is not real yet:
 - **Photos store no file.** The photo step posts a placeholder bubble with a
   fabricated filename and writes nothing, so `photo_key` stays null. Entry detail
   never shows a photo. Media upload is step 8.
-- **The question script is still hardcoded.** Claude drafts the summary, but does
-  not yet pick the questions. `app/lib/checkin.ts` holds the six steps, shaped to
-  the picker's output schema so it can be swapped without UI changes.
-  `ANTHROPIC_API_KEY` must be set for drafting; without it every check-in falls
-  back to a draft composed from the user's own answers.
+- **`ANTHROPIC_API_KEY` gates both LLM calls.** Without it the check-in still
+  works: questions come from the written script and the summary is composed from
+  the user's own answers.
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.
