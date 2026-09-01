@@ -14,7 +14,7 @@ Mobile-first: a single 452px column centred on larger screens.
 | Data | Postgres via Supabase, owner-scoped with RLS |
 | Auth | Supabase Auth, email and password |
 | Media | Supabase Storage, private bucket, signed URLs (not yet wired) |
-| LLM | Claude API via `@anthropic-ai/sdk`, server-side only. Opus 5 drafts the day, Haiku 4.5 rewords questions |
+| LLM | Claude API via `@anthropic-ai/sdk`, server-side only. Haiku 4.5 for both calls |
 
 No Tailwind. The design is specified as exact pixel values over CSS custom
 properties, so tokens plus CSS Modules maps onto it directly. Tailwind would add a
@@ -94,8 +94,8 @@ Screens first against seeded data, backend second.
 4. **Done.** Entry detail, then Timeline, then Insights.
 5. **Done.** Onboarding.
 6. **Done.** Supabase project, schema, auth, RLS, then real queries.
-7. **Done.** Claude drafts the day's summary (Opus 5) and rewords each question
-   for the person (Haiku 4.5).
+7. **Done.** Claude drafts the day's summary and rewords each question for the
+   person. Both calls use Haiku 4.5.
 8. Media upload, then the weekly note job.
 
 ## Known facades

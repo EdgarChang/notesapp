@@ -90,6 +90,9 @@ export function Checkin({
     answersRef.current = answers;
   }, [answers]);
 
+  /** Questions already asked tonight, so the picker does not reuse a framing. */
+  const askedRef = useRef<string[]>([]);
+
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -130,11 +133,12 @@ export function Checkin({
       setActiveStep(null);
       const startedAt = Date.now();
 
-      void nextQuestion(base, answersRef.current).then((step) => {
+      void nextQuestion(base, answersRef.current, askedRef.current).then((step) => {
         const remaining = Math.max(0, TIMING.typing - (Date.now() - startedAt));
         later(() => {
           setTyping(false);
           setActiveStep(step);
+          askedRef.current = [...askedRef.current, step.question];
           push({
             from: "bot",
             kind: "text",

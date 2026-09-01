@@ -135,10 +135,11 @@ export async function recordPeople(names: string[]): Promise<void> {
 export async function nextQuestion(
   step: ScriptStep,
   answers: CheckinAnswers,
+  askedTonight: string[] = [],
 ): Promise<ScriptStep> {
   try {
     const context = await getPickerContext();
-    const picked = await pickNextQuestion(step, context, answers);
+    const picked = await pickNextQuestion(step, context, answers, askedTonight);
     return picked ?? step;
   } catch (error) {
     console.error("[actions] nextQuestion:", error);

@@ -2,7 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { ScriptStep } from "./checkin";
+import type { ScriptStep, StepField } from "./checkin";
 import { MOOD_LABELS, type Mood } from "./entries";
 
 /**
@@ -13,15 +13,15 @@ import { MOOD_LABELS, type Mood } from "./entries";
  * browser.
  */
 
-/** Drafting: prose in the user's own voice, so quality is the product. */
-const DRAFT_MODEL = "claude-opus-5";
-
 /**
- * Question picking: rewording a fixed step from a short context, with the user
- * waiting. Cheap and fast is the right trade, and Haiku 4.5 predates the effort
- * parameter, so this call omits both `effort` and `thinking`.
+ * One model for both calls.
+ *
+ * Haiku 4.5 predates adaptive thinking and the effort parameter, so neither
+ * request sends `thinking` or `output_config.effort`: both are rejected on this
+ * model. Structured outputs via `output_config.format` work on every model, so
+ * the response shape is still validated rather than trusted.
  */
-const PICKER_MODEL = "claude-haiku-4-5";
+const MODEL = "claude-haiku-4-5";
 
 /** What the six steps collected. */
 export type CheckinAnswers = {
@@ -139,13 +139,9 @@ export async function draftDay(answers: CheckinAnswers): Promise<DayDraft | null
   try {
     const client = new Anthropic();
     const response = await client.messages.parse({
-      model: DRAFT_MODEL,
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      output_config: {
-        effort: "medium",
-        format: zodOutputFormat(DayDraftSchema),
-      },
+      model: MODEL,
+      max_tokens: 4096,
+      output_config: { format: zodOutputFormat(DayDraftSchema) },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content }],
     });
@@ -196,6 +192,23 @@ const NextQuestionSchema = z.object({
   adaptiveNote: z.string().nullable(),
 });
 
+/**
+ * What each step must still ask after rewording.
+ *
+ * Without this the model drifts: it turned the photo step into "What's one
+ * moment from today you want to hold onto?", which no longer asks for a photo
+ * while the controls below it still offered camera and camera roll.
+ */
+const FIELD_PURPOSE: Record<StepField, string> = {
+  mood: "How the day felt overall. The five chips are a stored 1-5 scale and must be returned unchanged.",
+  highlight: "The one thing from today worth remembering in a year.",
+  outside: "Whether they got outside today. Must be answerable with yes or no.",
+  gratitude: "What they were grateful for today.",
+  photo:
+    "Adding a photo from today. The question must explicitly ask for a photo, because the controls below it offer camera and camera roll.",
+  summary: "Not asked; a draft is shown instead.",
+};
+
 const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in so it fits the person being asked.
 
 You are given the step's fixed purpose, what they have already said tonight, and a little history. You may change the wording, the chip labels, and whether to show an adaptive note. You may not change what the step is for.
@@ -206,7 +219,8 @@ Voice:
 - Never congratulate them. Never refer to yourself as an AI or assistant.
 
 Rules:
-- Keep the question's purpose exactly. A mood question stays a mood question.
+- The question must still ask for exactly what \`mustAsk\` describes. If your rewording no longer asks for that thing, it is wrong, however well it reads.
+- Do not reuse the framing of a question already asked tonight. Two steps asking what they want to "hold onto" is a failure.
 - chips: for a mood step, return the five labels unchanged and in order, since they map to a stored 1-5 scale. For a text step these are optional tap-to-answer suggestions, so each one must read as a short answer the person could plausibly give tonight, not as a category label: "Lunch with Sam" works, "Friends" does not. Draw them from their recent entry titles and the people they name. Focus topics tell you what they care about but are not themselves answers. Return an empty array unless you can offer something specific and true, which for someone with little history means returning none.
 - adaptiveNote: set it only when history gives you something specific and true to point at, like a name or a topic that keeps recurring. Otherwise null. Never invent a pattern.
 - Refer to tonight's answers only if it makes the question better. Do not restate them back.`;
@@ -215,6 +229,7 @@ function buildPickerContent(
   step: ScriptStep,
   context: PickerContext,
   answers: CheckinAnswers,
+  asked: string[],
 ): string {
   const said: string[] = [];
   if (answers.mood !== null) said.push(`mood: ${MOOD_LABELS[answers.mood]}`);
@@ -225,11 +240,12 @@ function buildPickerContent(
   return JSON.stringify(
     {
       step: {
-        purpose: step.field,
+        mustAsk: FIELD_PURPOSE[step.field],
         format: step.kind,
         currentQuestion: step.question,
         currentChips: step.chips ?? [],
       },
+      alreadyAskedTonight: asked,
       tonightSoFar: said,
       focusTopics: context.focusTopics,
       recentEntryTitles: context.recentTitles,
@@ -252,6 +268,7 @@ export async function pickNextQuestion(
   step: ScriptStep,
   context: PickerContext,
   answers: CheckinAnswers,
+  askedTonight: string[] = [],
 ): Promise<ScriptStep | null> {
   if (!llmConfigured()) return null;
   // The summary step shows a draft rather than asking anything.
@@ -261,11 +278,16 @@ export async function pickNextQuestion(
     const client = new Anthropic();
     const response = await client.messages.parse(
       {
-        model: PICKER_MODEL,
+        model: MODEL,
         max_tokens: 2048,
         output_config: { format: zodOutputFormat(NextQuestionSchema) },
         system: PICKER_SYSTEM,
-        messages: [{ role: "user", content: buildPickerContent(step, context, answers) }],
+        messages: [
+          {
+            role: "user",
+            content: buildPickerContent(step, context, answers, askedTonight),
+          },
+        ],
       },
       // The user is watching a typing indicator. Past a few seconds the written
       // question is the better answer.
