@@ -10,6 +10,7 @@ import {
   type Mood,
 } from "./entries";
 import type { WeeklyNote } from "./insights";
+import type { Moment, Retrospect } from "./retrospect";
 import { createClient } from "./supabase/server";
 
 /** Columns selected for an entry. Keep in step with `toEntry`. */
@@ -268,11 +269,11 @@ export async function getMoodSeries(
 }
 
 /**
- * Names mentioned most often, counted across entries.
+ * Names appearing across the most entries.
  *
- * Derived rather than accumulated. A stored tally could not survive a day being
- * revised or an entry being deleted, and had already drifted to a count of
- * three from a single entry.
+ * No longer shown anywhere: it now only feeds the question picker's context, so
+ * it can mention someone who keeps coming up. Derived rather than accumulated,
+ * since a stored tally could not survive a day being revised or deleted.
  */
 export async function getTopPeople(
   limit = 4,
@@ -349,5 +350,86 @@ export async function getPickerContext(): Promise<{
     focusTopics: (profile?.focus_topics ?? []) as string[],
     recentTitles: (recent ?? []).map((r) => r.title as string),
     recurringPeople: people.map((p) => p.name),
+  };
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Looking back
+ * ------------------------------------------------------------------------- */
+
+/** Entries in a range, oldest first, with the text that was kept. */
+export async function getEntriesInRange(
+  start: string,
+  end: string,
+): Promise<{ date: string; mood: number | null; text: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("entries")
+    .select("entry_date, mood, title, summary, summary_draft, gratitude")
+    .gte("entry_date", start)
+    .lte("entry_date", end)
+    .order("entry_date", { ascending: true });
+  failed("getEntriesInRange", error);
+
+  return (data ?? [])
+    .map((r) => {
+      const body = r.summary ?? r.summary_draft ?? "";
+      const parts = [r.title, body, r.gratitude ? `Grateful for: ${r.gratitude}` : ""]
+        .filter(Boolean)
+        .join(" — ");
+      return { date: r.entry_date as string, mood: r.mood, text: parts };
+    })
+    .filter((e) => e.text.trim().length > 0);
+}
+
+/**
+ * Identifies the entries in a range, so a cached retrospect can be spotted as
+ * stale. Counts alone would miss an edit that changed a day without adding one.
+ */
+export async function rangeFingerprint(start: string, end: string): Promise<string> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("entries")
+    .select("updated_at")
+    .gte("entry_date", start)
+    .lte("entry_date", end)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  failed("rangeFingerprint", error);
+
+  const { count } = await supabase
+    .from("entries")
+    .select("id", { count: "exact", head: true })
+    .gte("entry_date", start)
+    .lte("entry_date", end);
+
+  return `${count ?? 0}:${data?.[0]?.updated_at ?? "none"}`;
+}
+
+/** A stored retrospect for this range, or null when there is none or it is stale. */
+export async function getRetrospect(
+  start: string,
+  end: string,
+): Promise<Retrospect | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("retrospects")
+    .select("range_start, range_end, fingerprint, headline, narrative, moments")
+    .eq("range_start", start)
+    .eq("range_end", end)
+    .maybeSingle();
+  failed("getRetrospect", error);
+  if (!data) return null;
+
+  const current = await rangeFingerprint(start, end);
+  if (data.fingerprint !== current) return null;
+
+  return {
+    rangeStart: data.range_start,
+    rangeEnd: data.range_end,
+    headline: data.headline,
+    narrative: data.narrative,
+    moments: (data.moments ?? []) as Moment[],
   };
 }

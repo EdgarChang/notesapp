@@ -36,8 +36,3 @@ export function moodBarHeight(mood: Mood): number {
   return 18 + mood * 15;
 }
 
-/** Progress bar width for a person, relative to the most-named. */
-export function personShare(count: number, people: { count: number }[]): number {
-  const max = Math.max(...people.map((p) => p.count));
-  return max === 0 ? 0 : (count / max) * 100;
-}

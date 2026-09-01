@@ -1,13 +1,15 @@
 import { Screen } from "@/app/components/AppShell";
 import { todayIso } from "@/app/lib/entries";
-import { moodBarHeight, moodTone, personShare } from "@/app/lib/insights";
+import { moodBarHeight, moodTone } from "@/app/lib/insights";
 import {
   getGratitudeQuotes,
   getMoodSeries,
-  getTopPeople,
+  getRetrospect,
   getUser,
   getWeeklyNote,
 } from "@/app/lib/queries";
+import { resolveRange } from "@/app/lib/retrospect";
+import { Retrospect } from "../Retrospect";
 import styles from "../insights.module.css";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +22,15 @@ const TONE_CLASS = {
 
 export default async function InsightsPage() {
   const today = todayIso();
-  const [user, weekly, mood, people, quotes] = await Promise.all([
+  const thisWeek = resolveRange("week", today);
+  const [user, weekly, mood, quotes, storedRetrospect] = await Promise.all([
     getUser(),
     getWeeklyNote(),
     getMoodSeries(14, today),
-    getTopPeople(4),
     getGratitudeQuotes(3),
+    // Only loaded, never generated on render: writing one is slow and costs a
+    // call, so it happens when asked for.
+    getRetrospect(thisWeek.start, thisWeek.end),
   ]);
 
   // The weekly note comes from a scheduled job that does not exist yet, so the
@@ -34,14 +39,12 @@ export default async function InsightsPage() {
     ? weekly.moodSeries
     : mood.series;
   const axis = weekly?.moodSeries.length ? weekly.moodAxis : mood.axis;
-  const topPeople = weekly?.topPeople.length ? weekly.topPeople : people;
   const gratitudeQuotes = weekly?.gratitudeQuotes.length
     ? weekly.gratitudeQuotes
     : quotes;
 
   const hasMood = series.some((m) => m !== null);
-  const hasAnything =
-    weekly !== null || hasMood || topPeople.length > 0 || gratitudeQuotes.length > 0;
+  const hasAnything = weekly !== null || hasMood || gratitudeQuotes.length > 0;
 
   return (
     <Screen>
@@ -93,25 +96,7 @@ export default async function InsightsPage() {
         </section>
       ) : null}
 
-      {topPeople.length > 0 ? (
-        <section className={styles.panel}>
-          <h4 className={styles.peopleTitle}>Named Most Often</h4>
-          <div className={styles.people}>
-            {topPeople.map((person) => (
-              <div key={person.name} className={styles.personRow}>
-                <div className={styles.personName}>{person.name}</div>
-                <div className={styles.personTrack}>
-                  <div
-                    className={styles.personFill}
-                    style={{ width: `${personShare(person.count, topPeople)}%` }}
-                  />
-                </div>
-                <div className={styles.personCount}>{person.count}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <Retrospect today={today} initial={storedRetrospect} />
 
       {gratitudeQuotes.length > 0 ? (
         <section className={styles.gratitude}>

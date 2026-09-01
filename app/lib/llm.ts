@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { ScriptStep, StepField } from "./checkin";
+import type { Moment } from "./retrospect";
 import { MOOD_LABELS, type Mood } from "./entries";
 
 /**
@@ -439,6 +440,110 @@ export async function extractMentions(
       console.error(`[llm] extractMentions ${error.status}: ${error.message}`);
     } else {
       console.error("[llm] extractMentions failed:", error);
+    }
+    return null;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Looking back
+ * ------------------------------------------------------------------------- */
+
+const RetrospectSchema = z.object({
+  /** One line for the whole stretch. */
+  headline: z.string(),
+  /** A few short paragraphs. */
+  narrative: z.string(),
+  /** The days worth calling out, newest last. */
+  moments: z.array(
+    z.object({
+      date: z.string(),
+      what: z.string(),
+      why: z.string(),
+    }),
+  ),
+});
+
+const RETROSPECT_SYSTEM = `You look back over a stretch of someone's journal and tell them what it held.
+
+You are given their entries in date order. Each has a date, a mood from 1 (rough) to 5 (great), and what they wrote.
+
+headline:
+- One sentence naming what this stretch was actually about. Specific, not a label. "The month the migration finally shipped" beats "A productive month".
+
+narrative:
+- Two or three short paragraphs, second person, past tense.
+- Say what happened and what changed across the stretch. Note a shift if there is one: something that started, stopped, got easier, kept recurring.
+- Draw on the whole range, not just the last few days.
+- Plain and warm. No emoji, no exclamation marks, no therapy-speak, no advice, no praise for journalling.
+
+moments:
+- The days genuinely worth remembering, in date order. Usually three to six; fewer if the stretch was quiet, and none if nothing stands out.
+- Choose by weight, not by recency or by mood alone: a first, a last, a turning point, a hard day, something they clearly cared about. A pleasant but unremarkable day is not a moment.
+- what: one sentence on what happened, in their own terms.
+- why: one sentence on why it earned a place, which is where you may connect it to the rest of the stretch.
+- date must be the exact date string of the entry it came from.
+
+Rules:
+- Invent nothing. Every claim must trace to an entry. If they wrote little, say little.
+- Never total up moods or quote statistics. This is a recollection, not a report.
+- If the range holds very few entries, a short honest narrative is the right answer.`;
+
+export type RetrospectInput = {
+  date: string;
+  mood: number | null;
+  text: string;
+}[];
+
+/**
+ * Write the look back. Returns null on any failure so the caller can say so
+ * rather than showing an empty screen.
+ *
+ * Effort is not set: Haiku 4.5 rejects it. A year of entries is the largest
+ * prompt in the app, so this streams to avoid the SDK's request timeout.
+ */
+export async function writeRetrospect(
+  entries: RetrospectInput,
+  rangeLabel: string,
+): Promise<{ headline: string; narrative: string; moments: Moment[] } | null> {
+  if (!llmConfigured()) return null;
+  if (entries.length === 0) return null;
+
+  const content = JSON.stringify({ range: rangeLabel, entries }, null, 1);
+
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.parse({
+      model: MODEL,
+      max_tokens: 8192,
+      output_config: { format: zodOutputFormat(RetrospectSchema) },
+      system: RETROSPECT_SYSTEM,
+      messages: [{ role: "user", content }],
+    });
+
+    if (response.stop_reason === "refusal") {
+      console.error("[llm] writeRetrospect declined:", response.stop_details?.category);
+      return null;
+    }
+    const parsed = response.parsed_output;
+    if (!parsed?.headline.trim()) return null;
+
+    const dates = new Set(entries.map((e) => e.date));
+    return {
+      headline: parsed.headline.trim(),
+      narrative: parsed.narrative.trim(),
+      // Drop any moment pinned to a date that is not in the range, rather than
+      // showing the reader a day that never existed.
+      moments: parsed.moments
+        .filter((m) => dates.has(m.date))
+        .map((m) => ({ date: m.date, what: m.what.trim(), why: m.why.trim() })),
+    };
+  } catch (error) {
+    if (error instanceof Anthropic.APIError) {
+      console.error(`[llm] writeRetrospect ${error.status}: ${error.message}`);
+    } else {
+      console.error("[llm] writeRetrospect failed:", error);
     }
     return null;
   }

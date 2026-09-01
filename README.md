@@ -136,6 +136,23 @@ There is no learning loop yet. `question_profiles.question_weights`,
 written, so nothing records which questions land or retires one you never answer.
 Adaptation comes only from the history above, recomputed each night.
 
+## Looking back
+
+Insights carries a range picker: this week, this month, this year, or a custom
+pair of dates. Asking for one sends the entries in that range to the model,
+which returns a headline, a short narrative, and the handful of days it judged
+worth calling out, each with a line on why it earned a place. Days that were
+quiet are left out; that selection is the point of the feature.
+
+It is generated on request, never on render, because a long range is the largest
+prompt in the app and takes several seconds. Results are stored in `retrospects`
+and returned instantly on a repeat visit.
+
+A stored retrospect carries a fingerprint of the entries it was built from:
+their count plus the latest `updated_at` in the range. Editing a day without
+adding one still changes that, so a stale look back is offered for regeneration
+rather than shown.
+
 ## Known facades
 
 What is real now: accounts, sessions, route protection, and entries. A check-in
@@ -155,8 +172,8 @@ What is not real yet:
   works, but flatly: questions come from the written script, replies are the
   written one-liners, and the summary is composed from the user's own answers.
 - **No learning loop.** See "How the check-in adapts" above.
-  `question_profiles.recurring_people` is also unused now: "Named Most Often"
-  counts `entries.people` instead, so revising or deleting a day corrects it.
+  `question_profiles.recurring_people` is unused; `entries.people` now only
+  feeds the question picker's context.
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.

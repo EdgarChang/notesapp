@@ -8,10 +8,17 @@ import {
   draftDay,
   extractMentions,
   pickNextQuestion,
+  writeRetrospect,
   type CheckinAnswers,
   type DayDraft,
 } from "./llm";
-import { getPickerContext } from "./queries";
+import { describeRange, isValidRange, type Retrospect } from "./retrospect";
+import {
+  getEntriesInRange,
+  getPickerContext,
+  getRetrospect,
+  rangeFingerprint,
+} from "./queries";
 import { createClient } from "./supabase/server";
 
 export type CheckinInput = {
@@ -159,4 +166,74 @@ export async function nextQuestion(
     console.error("[actions] nextQuestion:", error);
     return fallback;
   }
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Looking back
+ * ------------------------------------------------------------------------- */
+
+export type RetrospectResult =
+  | { ok: true; retrospect: Retrospect }
+  | { ok: false; reason: "empty" | "failed" | "range" };
+
+/**
+ * Write and store a look back over a range.
+ *
+ * Returns a cached one when the entries have not changed since it was made,
+ * because this is the most expensive call in the app and the answer only moves
+ * when the entries do.
+ */
+export async function generateRetrospect(
+  start: string,
+  end: string,
+): Promise<RetrospectResult> {
+  if (!isValidRange(start, end)) return { ok: false, reason: "range" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: "failed" };
+
+  const cached = await getRetrospect(start, end);
+  if (cached) return { ok: true, retrospect: cached };
+
+  const entries = await getEntriesInRange(start, end);
+  if (entries.length === 0) return { ok: false, reason: "empty" };
+
+  const written = await writeRetrospect(entries, describeRange(start, end));
+  if (!written) return { ok: false, reason: "failed" };
+
+  const retrospect: Retrospect = {
+    rangeStart: start,
+    rangeEnd: end,
+    ...written,
+  };
+
+  const { error } = await supabase.from("retrospects").upsert(
+    {
+      user_id: user.id,
+      range_start: start,
+      range_end: end,
+      fingerprint: await rangeFingerprint(start, end),
+      headline: retrospect.headline,
+      narrative: retrospect.narrative,
+      moments: retrospect.moments,
+    },
+    { onConflict: "user_id,range_start,range_end" },
+  );
+  // A failed write costs a regeneration next time, not the result in hand.
+  if (error) console.error("[actions] generateRetrospect store:", error.message);
+
+  return { ok: true, retrospect };
+}
+
+/** Load a stored retrospect without generating one. */
+export async function loadRetrospect(
+  start: string,
+  end: string,
+): Promise<Retrospect | null> {
+  if (!isValidRange(start, end)) return null;
+  return getRetrospect(start, end);
 }

@@ -1,0 +1,195 @@
+.root {
+  border: 1px solid var(--border-1);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+
+/* ---------- Range ---------- */
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.preset {
+  flex: 0 1 auto;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-1);
+  background: var(--bg-1);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+
+.preset:hover {
+  border-color: var(--border-brand);
+}
+
+/* Gradient rather than a flat brand fill: the one combination cleared for
+   white text at this size. */
+.presetOn {
+  background: var(--bg-brand);
+  border-color: transparent;
+  color: var(--fg-inverse);
+}
+
+.customRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dateField {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dateLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.date {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--fg-1);
+  border: 1.5px solid var(--border-2);
+  border-radius: 4px;
+  background: var(--bg-1);
+}
+
+.rangeLine {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-bottom: 16px;
+}
+
+/* ---------- The look back ---------- */
+
+.headline {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+  margin: 0 0 12px;
+}
+
+.narrative {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--fg-2);
+  margin: 0 0 12px;
+}
+
+.moments {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.moment {
+  padding-left: 14px;
+  border-left: 2px solid var(--block-mango);
+}
+
+.momentDate {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 4px;
+}
+
+.momentWhat {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+
+.momentWhy {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg-3);
+  margin-top: 3px;
+}
+
+/* ---------- Actions ---------- */
+
+.cta,
+.again {
+  width: 100%;
+  min-height: 46px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+
+.cta {
+  border: none;
+  background: var(--bg-brand);
+  color: var(--fg-inverse);
+}
+
+.cta:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.again {
+  margin-top: 18px;
+  border: 1px solid var(--border-1);
+  background: var(--bg-1);
+  color: var(--fg-3);
+  font-weight: 500;
+}
+
+.again:hover:not(:disabled) {
+  border-color: var(--border-2);
+  color: var(--fg-2);
+}
+
+.again:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  color: var(--brand-text);
+  background: var(--tint-50);
+  border: 1.5px solid var(--tint-100);
+}
