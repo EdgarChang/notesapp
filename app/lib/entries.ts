@@ -21,6 +21,9 @@ export function moodLabel(mood: Mood): string {
   return "Hard";
 }
 
+/** One question from the night, kept with the answer so it reads back in full. */
+export type AnsweredQuestion = { question: string; answer: string };
+
 export type Entry = {
   id: string;
   /** ISO date. One entry per user per day, enforced by unique (user_id, entry_date). */
@@ -33,6 +36,13 @@ export type Entry = {
   tags: string[];
   hasPhoto: boolean;
   voiceDurationSeconds: number | null;
+  /**
+   * The night's rotating questions with their answers, in the order asked.
+   * Anchors are excluded: their wording is fixed and shown elsewhere.
+   */
+  answers: AnsweredQuestion[];
+  /** The one-word feel from anchor a002, if it was answered. */
+  feeling: string | null;
   /** Text of the entry from the same date a year earlier, if there is one. */
   lastYear: string | null;
   /** Derived from the id, so an entry keeps its colour for good. */
@@ -170,4 +180,25 @@ export function todayIso(): string {
 export function oneYearBefore(isoDate: string): string {
   const { y, m, d } = parts(isoDate);
   return `${y - 1}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * The same day-of-month, `delta` months away, clamped to the target month's
+ * length. Built from the ISO parts for the same reason as the helpers above: a
+ * calendar month is not an instant, and Date would let the server's timezone
+ * shift it.
+ */
+export function shiftMonth(isoDate: string, delta: number): string {
+  const { y, m, d } = parts(isoDate);
+  const total = (y * 12 + (m - 1)) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  const first = `${ny}-${String(nm).padStart(2, "0")}-01`;
+  const nd = Math.min(d, daysInMonth(first));
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(nd).padStart(2, "0")}`;
+}
+
+/** "YYYY-MM" for the month an ISO date falls in. */
+export function monthKey(isoDate: string): string {
+  return isoDate.slice(0, 7);
 }

@@ -1,7 +1,7 @@
 # Keepsake
 
-A nightly check-in journal. The assistant asks six short questions, drafts the day
-in three lines, and you keep what rings true.
+A nightly check-in journal. The assistant asks a handful of short questions,
+drafts the day in three lines, and you keep what rings true.
 
 Mobile-first: a single 452px column centred on larger screens.
 
@@ -68,7 +68,7 @@ app/
 | Route | Screen | Tab bar |
 |---|---|---|
 | `/` | Today | yes |
-| `/timeline` | Timeline | yes |
+| `/timeline` | Timeline, `?m=YYYY-MM` picks the month | yes |
 | `/insights` | Insights | yes |
 | `/entry/[id]` | Entry detail | yes |
 | `/checkin` | Nightly check-in | no |
@@ -135,6 +135,21 @@ There is no learning loop yet. `question_profiles.question_weights`,
 `retired_questions` and `last_asked` exist in the schema and are never read or
 written, so nothing records which questions land or retires one you never answer.
 Adaptation comes only from the history above, recomputed each night.
+
+## Reading a day back
+
+Entry detail shows the night's rotating questions with their answers under a
+"That night" heading, in the order they were asked. The question text is stored
+on the entry itself rather than looked up from the bank, so a day still reads
+correctly after a prompt is reworded or retired.
+
+Anchors are left out of that list: their wording is fixed, and the mood score
+and tags already appear above. Skipped questions and empty answers are dropped,
+since a question with nothing under it reads as a gap rather than a record.
+
+Timeline opens on the current month and steps back a month at a time through
+`?m=YYYY-MM`. The forward arrow stops at the current month, since there is
+nothing ahead of it to look at.
 
 ## Looking back
 

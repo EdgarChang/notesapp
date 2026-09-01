@@ -1,4 +1,5 @@
 import "server-only";
+import type { AnsweredQuestion } from "./entries";
 import {
   dayOfWeek,
   daysInMonth,
@@ -15,7 +16,7 @@ import { createClient } from "./supabase/server";
 
 /** Columns selected for an entry. Keep in step with `toEntry`. */
 const ENTRY_COLUMNS =
-  "id, entry_date, mood, title, summary, summary_draft, gratitude, tags, photo_key, voice_duration_seconds";
+  "id, entry_date, mood, title, summary, summary_draft, gratitude, tags, photo_key, voice_duration_seconds, anchor_responses, prompt_responses";
 
 /**
  * Log a failed query instead of letting `?? []` turn it into an empty result.
@@ -38,7 +39,38 @@ type EntryRow = {
   tags: string[] | null;
   photo_key: string | null;
   voice_duration_seconds: number | null;
+  anchor_responses: unknown;
+  prompt_responses: unknown;
 };
+
+/**
+ * The night's questions and answers, in the order they were asked.
+ *
+ * Skipped and empty ones are dropped: a question with no answer under it reads
+ * as a gap rather than a record. Rows written before question text was stored
+ * carry no `question_text` and are dropped for the same reason.
+ */
+function answersOf(raw: unknown): AnsweredQuestion[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AnsweredQuestion[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const row = item as Record<string, unknown>;
+    if (row.skipped === true) continue;
+    const question = typeof row.question_text === "string" ? row.question_text.trim() : "";
+    const answer = typeof row.value === "string" ? row.value.trim() : "";
+    if (!question || !answer) continue;
+    out.push({ question, answer });
+  }
+  return out;
+}
+
+/** Anchor a002, the one word for the day. */
+function feelingOf(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const word = (raw as Record<string, unknown>).a002;
+  return typeof word === "string" && word.trim() ? word.trim() : null;
+}
 
 /**
  * Database row to the shape the screens already render. `lastYear` is filled in
@@ -56,6 +88,8 @@ function toEntry(row: EntryRow): Entry {
     tags: row.tags ?? [],
     hasPhoto: row.photo_key !== null,
     voiceDurationSeconds: row.voice_duration_seconds,
+    answers: answersOf(row.prompt_responses),
+    feeling: feelingOf(row.anchor_responses),
     lastYear: null,
     tintIndex: tintIndexFor(row.id),
   };

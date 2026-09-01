@@ -156,3 +156,40 @@
   line-height: 1.55;
   color: var(--fg-2);
 }
+
+/* ---------- The night's questions, kept with their answers ---------- */
+
+.asked {
+  /* Matches the summary's own bottom margin, so the "one year ago" card sits
+     the same distance below either of them. */
+  margin: 28px 0 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border-1);
+}
+
+.qaList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.qa {
+  margin: 0;
+}
+
+.question {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg-3);
+  margin-bottom: 5px;
+}
+
+/* dd carries a 40px inline start margin by default. */
+.answer {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}

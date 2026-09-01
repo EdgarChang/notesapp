@@ -56,7 +56,10 @@ export default async function TodayPage() {
         <div className={styles.heroMeta}>
           {stats.keptToday
             ? "Come back tomorrow evening."
-            : "Six quick ones. About a minute."}
+            : // Not a fixed count any more: the prompt system picks two or
+              // three specifics on top of the anchors, and a skipped one
+              // shortens the night. The budget is the honest promise.
+              "A few questions. Ninety seconds, tops."}
         </div>
         <Link href="/checkin" className={styles.heroCta}>
           {stats.keptToday ? "Look again" : "Start"}

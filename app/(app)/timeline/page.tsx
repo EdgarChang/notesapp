@@ -1,24 +1,48 @@
 import Link from "next/link";
 import { Screen } from "@/app/components/AppShell";
 import { EntryCard } from "@/app/components/EntryCard";
-import { daysInMonth, monthAndYear, todayIso } from "@/app/lib/entries";
+import {
+  daysInMonth,
+  monthAndYear,
+  monthKey,
+  shiftMonth,
+  todayIso,
+} from "@/app/lib/entries";
 import { getEntriesForMonth, getRecentEntries } from "@/app/lib/queries";
 import { buildCalendar, countKept, DOW_LABELS } from "@/app/lib/timeline";
 import styles from "../timeline.module.css";
 
 export const dynamic = "force-dynamic";
 
-export default async function TimelinePage() {
+/** `?m=YYYY-MM`, ignored unless it is a real month. */
+function anchorFrom(month: string | undefined, today: string): string {
+  if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return today;
+  return `${month}-01`;
+}
+
+export default async function TimelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ m?: string }>;
+}) {
   const today = todayIso();
+  const { m } = await searchParams;
+  const anchor = anchorFrom(m, today);
+
   const [monthEntries, recent] = await Promise.all([
-    getEntriesForMonth(today),
+    getEntriesForMonth(anchor),
     getRecentEntries(5),
   ]);
 
-  const cells = buildCalendar(monthEntries, today);
+  const cells = buildCalendar(monthEntries, anchor, today);
   const kept = countKept(cells);
-  const total = daysInMonth(today);
-  const monthLabel = monthAndYear(today);
+  const total = daysInMonth(anchor);
+  const monthLabel = monthAndYear(anchor);
+
+  const prevMonth = monthKey(shiftMonth(anchor, -1));
+  // Nothing to look at ahead of the current month, so the arrow stops there.
+  const nextMonth = monthKey(shiftMonth(anchor, 1));
+  const canGoForward = nextMonth <= monthKey(today);
 
   return (
     <Screen>
@@ -27,7 +51,29 @@ export default async function TimelinePage() {
       </div>
 
       <div className={styles.head}>
-        <h3 className={styles.month}>{monthLabel}</h3>
+        <div className={styles.monthNav}>
+          <Link
+            href={`/timeline?m=${prevMonth}`}
+            className={styles.step}
+            aria-label={`Previous month, ${monthAndYear(`${prevMonth}-01`)}`}
+          >
+            ‹
+          </Link>
+          <h3 className={styles.month}>{monthLabel}</h3>
+          {canGoForward ? (
+            <Link
+              href={`/timeline?m=${nextMonth}`}
+              className={styles.step}
+              aria-label={`Next month, ${monthAndYear(`${nextMonth}-01`)}`}
+            >
+              ›
+            </Link>
+          ) : (
+            <span className={`${styles.step} ${styles.stepOff}`} aria-hidden="true">
+              ›
+            </span>
+          )}
+        </div>
         <div className={styles.kept}>
           {kept} of {total} kept
         </div>

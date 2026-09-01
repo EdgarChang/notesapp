@@ -77,6 +77,22 @@ export default async function EntryPage({
           </div>
         ) : null}
 
+        {entry.answers.length > 0 ? (
+          <div className={styles.asked}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>
+              That night
+            </div>
+            <dl className={styles.qaList}>
+              {entry.answers.map((qa, i) => (
+                <div key={i} className={styles.qa}>
+                  <dt className={styles.question}>{qa.question}</dt>
+                  <dd className={styles.answer}>{qa.answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
+
         {entry.lastYear ? (
           <div className={styles.lastYear}>
             <div className="eyebrow" style={{ marginBottom: 8 }}>

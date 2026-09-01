@@ -9,14 +9,21 @@ export type CalendarCell =
   | { kind: "empty"; day: number };
 
 /**
- * The month grid for the month `today` falls in: leading blanks to line the 1st
- * up under its weekday, then one cell per day. Every kept day now has a real
+ * The month grid for the month `anchor` falls in: leading blanks to line the
+ * 1st up under its weekday, then one cell per day. Every kept day has a real
  * entry behind it, so every kept cell is clickable.
+ *
+ * `anchor` and `today` are separate so the grid can show a past month without
+ * marking one of its days as today.
  */
-export function buildCalendar(entries: Entry[], today: string): CalendarCell[] {
-  const todayDay = dayOfMonth(today);
-  const month = today.slice(0, 7);
-  const total = daysInMonth(today);
+export function buildCalendar(
+  entries: Entry[],
+  anchor: string,
+  today: string,
+): CalendarCell[] {
+  const month = anchor.slice(0, 7);
+  const todayDay = today.slice(0, 7) === month ? dayOfMonth(today) : -1;
+  const total = daysInMonth(anchor);
   const leadingBlanks = dayOfWeek(`${month}-01`);
 
   const entryByDay = new Map<number, string>();

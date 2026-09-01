@@ -93,3 +93,37 @@
   flex-direction: column;
   gap: 12px;
 }
+
+/* ---------- Month navigation ---------- */
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -10px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fg-2);
+  text-decoration: none;
+  border-radius: 3px;
+  transition: background var(--dur-base) var(--ease-standard);
+}
+
+.step:hover {
+  background: var(--tint-50);
+  color: var(--fg-brand);
+}
+
+.stepOff {
+  color: var(--border-2);
+  pointer-events: none;
+}
