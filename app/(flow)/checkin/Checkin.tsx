@@ -92,6 +92,8 @@ export function Checkin({
 
   /** Questions already asked tonight, so the picker does not reuse a framing. */
   const askedRef = useRef<string[]>([]);
+  /** The answer just given, which the reply should respond to. */
+  const lastAnswerRef = useRef<string | null>(null);
 
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
@@ -117,12 +119,15 @@ export function Checkin({
   }, []);
 
   /**
-   * Assistant types, then asks question `index`.
+   * Reply to the last answer, then ask question `index`.
    *
-   * The typing indicator now covers a real request rather than a fixed delay:
-   * the picker rewords the step for this person, and whichever question arrives
-   * is shown once at least TIMING.typing has passed, so a fast reply does not
-   * flash past. nextQuestion always resolves, falling back to the written step.
+   * One request produces both, since the model needs the same context for each:
+   * what they just said, and what the next step is for. The sequence mirrors a
+   * person replying — a short reaction, a beat, then the question — so the
+   * typing indicator runs twice rather than covering one fixed delay.
+   *
+   * nextQuestion always resolves, falling back to the written step and its
+   * written acknowledgement, so a slow or failed call never stalls the check-in.
    */
   const askAt = useCallback(
     (index: number) => {
@@ -133,22 +138,48 @@ export function Checkin({
       setActiveStep(null);
       const startedAt = Date.now();
 
-      void nextQuestion(base, answersRef.current, askedRef.current).then((step) => {
-        const remaining = Math.max(0, TIMING.typing - (Date.now() - startedAt));
-        later(() => {
-          setTyping(false);
-          setActiveStep(step);
-          askedRef.current = [...askedRef.current, step.question];
-          push({
-            from: "bot",
-            kind: "text",
-            text: step.question,
-            ...(showAdaptiveNotes && step.adaptiveNote
-              ? { adaptiveNote: step.adaptiveNote }
-              : {}),
-          });
-        }, remaining);
-      });
+      void nextQuestion(
+        base,
+        answersRef.current,
+        askedRef.current,
+        lastAnswerRef.current,
+        // The written reply belongs to the step just answered.
+        script[index - 1]?.ack ?? "",
+      ).then(
+        ({ step, acknowledgement }) => {
+          const showQuestion = () => {
+            setTyping(false);
+            setActiveStep(step);
+            askedRef.current = [...askedRef.current, step.question];
+            push({
+              from: "bot",
+              kind: "text",
+              text: step.question,
+              ...(showAdaptiveNotes && step.adaptiveNote
+                ? { adaptiveNote: step.adaptiveNote }
+                : {}),
+            });
+          };
+
+          // Nothing to reply to: hold the indicator to its floor so a fast
+          // response does not flash past, then ask.
+          if (!acknowledgement) {
+            later(showQuestion, Math.max(0, TIMING.typing - (Date.now() - startedAt)));
+            return;
+          }
+
+          later(
+            () => {
+              setTyping(false);
+              push({ from: "bot", kind: "text", text: acknowledgement });
+              // A beat, then the assistant starts typing the question.
+              later(() => setTyping(true), TIMING.ack);
+              later(showQuestion, TIMING.ack + TIMING.typing);
+            },
+            Math.max(0, TIMING.ack - (Date.now() - startedAt)),
+          );
+        },
+      );
     },
     [script, showAdaptiveNotes, push, later],
   );
@@ -159,18 +190,25 @@ export function Checkin({
     return () => clearTimeout(t);
   }, [askAt]);
 
+  /**
+   * Post the answer and move on. The reply to it comes back from askAt with the
+   * next question, so this no longer pushes a written acknowledgement itself.
+   */
   const advance = useCallback(
-    (answer: NewMessage | null, ack: string) => {
+    (answer: NewMessage | null) => {
       if (answer) push(answer);
+      lastAnswerRef.current =
+        answer && answer.kind === "text"
+          ? answer.text
+          : answer?.kind === "photo"
+            ? "added a photo"
+            : null;
       const next = step + 1;
       setStep(next);
       setInputText("");
-      if (ack) {
-        later(() => push({ from: "bot", kind: "text", text: ack }), TIMING.ack);
-      }
-      later(() => askAt(next), ack ? TIMING.nextWithAck : TIMING.nextWithoutAck);
+      askAt(next);
     },
-    [step, push, later, askAt],
+    [step, push, askAt],
   );
 
   // The step as asked, falling back to the written one before it arrives.
@@ -236,7 +274,7 @@ export function Checkin({
         break;
     }
 
-    advance({ from: "user", kind: "text", text }, current.ack);
+    advance({ from: "user", kind: "text", text });
   };
 
   const sendInput = () => {
@@ -246,13 +284,10 @@ export function Checkin({
   };
 
   const addPhoto = () => {
-    advance(
-      { from: "user", kind: "photo", caption: CANNED_PHOTO_CAPTION },
-      current?.ack ?? "",
-    );
+    advance({ from: "user", kind: "photo", caption: CANNED_PHOTO_CAPTION });
   };
 
-  const skip = () => advance(null, "");
+  const skip = () => advance(null);
 
   const keepDay = async () => {
     if (saving || drafting) return;

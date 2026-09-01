@@ -181,6 +181,11 @@ export type PickerContext = {
 };
 
 const NextQuestionSchema = z.object({
+  /**
+   * A short reply to what they just said, before the next question. Empty when
+   * there is nothing to reply to, such as the very first question.
+   */
+  acknowledgement: z.string(),
   /** The question to ask, in the assistant's voice. */
   question: z.string(),
   /** Chip labels. Answers for a chips step, suggestions for a text step. */
@@ -206,7 +211,8 @@ const FIELD_PURPOSE: Record<StepField, string> = {
   gratitude: "What they were grateful for today.",
   photo:
     "Adding a photo from today. The question must explicitly ask for a photo, because the controls below it offer camera and camera roll.",
-  summary: "Not asked; a draft is shown instead.",
+  summary:
+    "Introducing the draft summary shown below, which they can edit. Not a question about their day.",
 };
 
 const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in so it fits the person being asked.
@@ -214,9 +220,18 @@ const PICKER_SYSTEM = `You reword one question in a nightly journalling check-in
 You are given the step's fixed purpose, what they have already said tonight, and a little history. You may change the wording, the chip labels, and whether to show an adaptive note. You may not change what the step is for.
 
 Voice:
-- Warm, plain, direct. One sentence. A question, not a prompt.
-- Second person. No emoji, no exclamation marks, no therapy-speak.
+- Warm, plain, direct. Second person. No emoji, no exclamation marks, no therapy-speak.
 - Never congratulate them. Never refer to yourself as an AI or assistant.
+
+acknowledgement:
+- A brief, human reply to what they just said, at most one short sentence. This is the one place you respond rather than ask.
+- React to the substance of their answer, not the fact that they answered. "Four flights of stairs is a lot" beats "Thanks for sharing".
+- Match the weight of what they said. A hard day gets a plain, unhurried reply and never a silver lining. A small win can get a light one.
+- Do not repeat their words back to them, do not summarise, do not give advice, and never ask a second question here.
+- When \`previousAnswer\` is present you must write one. Returning empty is only correct when \`previousAnswer\` is null, which happens on the first question of the night. A one-word answer like "Rough" still deserves a reply, and is the case where it matters most.
+
+question:
+- One sentence. A question, not a prompt.
 
 Rules:
 - The question must still ask for exactly what \`mustAsk\` describes. If your rewording no longer asks for that thing, it is wrong, however well it reads.
@@ -230,6 +245,7 @@ function buildPickerContent(
   context: PickerContext,
   answers: CheckinAnswers,
   asked: string[],
+  previousAnswer: string | null,
 ): string {
   const said: string[] = [];
   if (answers.mood !== null) said.push(`mood: ${MOOD_LABELS[answers.mood]}`);
@@ -245,6 +261,7 @@ function buildPickerContent(
         currentQuestion: step.question,
         currentChips: step.chips ?? [],
       },
+      previousAnswer: previousAnswer ?? null,
       alreadyAskedTonight: asked,
       tonightSoFar: said,
       focusTopics: context.focusTopics,
@@ -269,10 +286,9 @@ export async function pickNextQuestion(
   context: PickerContext,
   answers: CheckinAnswers,
   askedTonight: string[] = [],
-): Promise<ScriptStep | null> {
+  previousAnswer: string | null = null,
+): Promise<{ step: ScriptStep; acknowledgement: string } | null> {
   if (!llmConfigured()) return null;
-  // The summary step shows a draft rather than asking anything.
-  if (step.field === "summary") return null;
 
   try {
     const client = new Anthropic();
@@ -285,7 +301,13 @@ export async function pickNextQuestion(
         messages: [
           {
             role: "user",
-            content: buildPickerContent(step, context, answers, askedTonight),
+            content: buildPickerContent(
+              step,
+              context,
+              answers,
+              askedTonight,
+              previousAnswer,
+            ),
           },
         ],
       },
@@ -307,12 +329,15 @@ export async function pickNextQuestion(
         : parsed.chips.map((c) => c.trim()).filter(Boolean).slice(0, 3);
 
     return {
-      ...step,
-      question: parsed.question.trim(),
-      ...(chips?.length ? { chips } : {}),
-      ...(parsed.adaptiveNote?.trim()
-        ? { adaptiveNote: parsed.adaptiveNote.trim() }
-        : {}),
+      step: {
+        ...step,
+        question: parsed.question.trim(),
+        ...(chips?.length ? { chips } : {}),
+        ...(parsed.adaptiveNote?.trim()
+          ? { adaptiveNote: parsed.adaptiveNote.trim() }
+          : {}),
+      },
+      acknowledgement: parsed.acknowledgement.trim(),
     };
   } catch (error) {
     if (error instanceof Anthropic.APIError) {

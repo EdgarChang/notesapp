@@ -127,22 +127,36 @@ export async function recordPeople(names: string[]): Promise<void> {
 
 
 /**
- * Reword one check-in step for this person, or hand back the written one.
+ * Reply to what they just said, and reword the next step for this person.
  *
- * Always resolves to a usable step, so the check-in never stalls waiting on the
- * model. The caller passes the written step, which is also the fallback.
+ * Always resolves to something usable, so the check-in never stalls waiting on
+ * the model. Falls back to the written step and its written acknowledgement.
  */
 export async function nextQuestion(
   step: ScriptStep,
   answers: CheckinAnswers,
   askedTonight: string[] = [],
-): Promise<ScriptStep> {
+  previousAnswer: string | null = null,
+  /**
+   * The written reply to fall back on. It belongs to the step just answered, not
+   * the one being asked, so the caller supplies it: reading `step.ack` here
+   * would acknowledge the wrong answer.
+   */
+  fallbackAck = "",
+): Promise<{ step: ScriptStep; acknowledgement: string }> {
+  const fallback = { step, acknowledgement: fallbackAck };
   try {
     const context = await getPickerContext();
-    const picked = await pickNextQuestion(step, context, answers, askedTonight);
-    return picked ?? step;
+    const picked = await pickNextQuestion(
+      step,
+      context,
+      answers,
+      askedTonight,
+      previousAnswer,
+    );
+    return picked ?? fallback;
   } catch (error) {
     console.error("[actions] nextQuestion:", error);
-    return step;
+    return fallback;
   }
 }

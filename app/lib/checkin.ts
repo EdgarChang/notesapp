@@ -63,8 +63,11 @@ export function buildScript(tone: AssistantTone): ScriptStep[] {
       kind: "yesno",
       field: "outside",
       question: brief ? "Outside today?" : "Did you get outside at all today?",
-      adaptiveNote:
-        "You’ve mentioned daylight three nights running, so we keep asking.",
+      // No written adaptive note. The design's example claimed "you've mentioned
+      // daylight three nights running", which is an assertion about the reader's
+      // history that this app cannot make: nothing tracks per-question answer
+      // history yet. The picker sets a note only when it has something true to
+      // point at, and otherwise there is none.
       ack: "Good.",
     },
     {
@@ -105,12 +108,11 @@ export const TIMING = {
   open: 60,
   /** Assistant "typing" dwell before a question appears. */
   typing: 550,
-  /** Acknowledgement lands this long after the user's answer. */
+  /**
+   * The beat between the answer and the reply, and again between the reply and
+   * the assistant starting to type the next question.
+   */
   ack: 380,
-  /** Next question starts this long after the answer, with an ack. */
-  nextWithAck: 900,
-  /** Next question starts this long after the answer, when skipped. */
-  nextWithoutAck: 400,
 } as const;
 
 /**

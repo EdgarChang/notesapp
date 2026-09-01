@@ -98,6 +98,23 @@ Screens first against seeded data, backend second.
    person. Both calls use Haiku 4.5.
 8. Media upload, then the weekly note job.
 
+## How the check-in adapts
+
+One Haiku call per step returns both a reply to the answer just given and the
+next question, reworded for this person. It receives their focus topics, recent
+entry titles, the people they name, tonight's answers so far, and the questions
+already asked, so it does not reuse a framing.
+
+What it may not change: a step's `kind` or `field`, and the five mood chips. Each
+maps to a stored column, and the chips are a 1-5 scale, so letting the model
+reshape the flow could leave mood or gratitude never asked and quietly empty the
+Insights screen.
+
+There is no learning loop yet. `question_profiles.question_weights`,
+`retired_questions` and `last_asked` exist in the schema and are never read or
+written, so nothing records which questions land or retires one you never answer.
+Adaptation comes only from the history above, recomputed each night.
+
 ## Known facades
 
 What is real now: accounts, sessions, route protection, and entries. A check-in
@@ -114,8 +131,9 @@ What is not real yet:
   fabricated filename and writes nothing, so `photo_key` stays null. Entry detail
   never shows a photo. Media upload is step 8.
 - **`ANTHROPIC_API_KEY` gates both LLM calls.** Without it the check-in still
-  works: questions come from the written script and the summary is composed from
-  the user's own answers.
+  works, but flatly: questions come from the written script, replies are the
+  written one-liners, and the summary is composed from the user's own answers.
+- **No learning loop.** See "How the check-in adapts" above.
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.
