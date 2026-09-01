@@ -30,15 +30,18 @@ export default async function InsightsPage() {
 
   // The weekly note comes from a scheduled job that does not exist yet, so the
   // chart, people and quotes are composed from entries in the meantime.
-  const series = weekly?.moodSeries.length ? weekly.moodSeries : mood.series;
+  const series: (typeof mood.series)[number][] = weekly?.moodSeries.length
+    ? weekly.moodSeries
+    : mood.series;
   const axis = weekly?.moodSeries.length ? weekly.moodAxis : mood.axis;
   const topPeople = weekly?.topPeople.length ? weekly.topPeople : people;
   const gratitudeQuotes = weekly?.gratitudeQuotes.length
     ? weekly.gratitudeQuotes
     : quotes;
 
+  const hasMood = series.some((m) => m !== null);
   const hasAnything =
-    weekly !== null || series.length > 0 || topPeople.length > 0 || gratitudeQuotes.length > 0;
+    weekly !== null || hasMood || topPeople.length > 0 || gratitudeQuotes.length > 0;
 
   return (
     <Screen>
@@ -66,17 +69,22 @@ export default async function InsightsPage() {
         </section>
       ) : null}
 
-      {series.length > 0 ? (
+      {hasMood ? (
         <section className={styles.panel}>
           <h4 className={styles.panelTitle}>Mood, Last 14 Days</h4>
           <div className={styles.chart}>
-            {series.map((m, i) => (
-              <div
-                key={i}
-                className={`${styles.moodBar} ${TONE_CLASS[moodTone(m)]}`}
-                style={{ height: `${moodBarHeight(m)}px` }}
-              />
-            ))}
+            {series.map((m, i) =>
+              m === null ? (
+                // A day with no entry keeps its slot so the chart's shape holds.
+                <div key={i} className={styles.moodGap} aria-hidden="true" />
+              ) : (
+                <div
+                  key={i}
+                  className={`${styles.moodBar} ${TONE_CLASS[moodTone(m)]}`}
+                  style={{ height: `${moodBarHeight(m)}px` }}
+                />
+              ),
+            )}
           </div>
           <div className={styles.axis}>
             <span>{axis[0]}</span>

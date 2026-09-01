@@ -226,14 +226,17 @@ export async function getWeeklyNote(): Promise<WeeklyNote | null> {
 }
 
 /**
- * Mood for the last `days` days, oldest first, for the Insights chart. Days
- * without an entry are dropped rather than zero-filled, since a missed day is
- * not a mood of zero.
+ * Mood for the last `days` days, oldest first, one slot per day.
+ *
+ * Missing days are null rather than zero: a day you did not write is not a mood
+ * of zero, and averaging one in would be a lie. Keeping the slot rather than
+ * dropping it also holds the chart's geometry steady, so a single entry renders
+ * as one thin bar in its right position instead of stretching to fill the width.
  */
 export async function getMoodSeries(
   days = 14,
   today = todayIso(),
-): Promise<{ series: Mood[]; axis: [string, string] }> {
+): Promise<{ series: (Mood | null)[]; axis: [string, string] }> {
   const end = new Date(`${today}T00:00:00Z`);
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - (days - 1));
@@ -248,9 +251,18 @@ export async function getMoodSeries(
     .order("entry_date", { ascending: true });
   failed("getMoodSeries", error);
 
-  const series = (data ?? [])
-    .map((r) => r.mood)
-    .filter((m): m is number => m !== null) as Mood[];
+  const byDate = new Map<string, Mood | null>();
+  for (const row of data ?? []) {
+    byDate.set(row.entry_date, (row.mood ?? null) as Mood | null);
+  }
+
+  const series: (Mood | null)[] = [];
+  const cursor = new Date(start);
+  for (let i = 0; i < days; i++) {
+    const iso = cursor.toISOString().slice(0, 10);
+    series.push(byDate.get(iso) ?? null);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
 
   return { series, axis: [shortMonthDay(startIso), shortMonthDay(today)] };
 }

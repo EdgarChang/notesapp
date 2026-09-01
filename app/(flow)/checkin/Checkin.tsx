@@ -35,6 +35,12 @@ type Answers = {
 
 type Draft = {
   title: string;
+  /**
+   * The summary exactly as drafted, kept separate from the editable `summary`
+   * state so summary_draft records what was offered rather than what was kept.
+   * Comparing the two is the only honest signal for how much people rewrite.
+   */
+  summary: string;
   tags: string[];
   people: string[];
   /** False when the plainly composed fallback was used. */
@@ -148,7 +154,13 @@ export function Checkin({
     draftToday(answers)
       .then(({ draft: d, usedModel }) => {
         setSummary(d.summary);
-        setDraft({ title: d.title, tags: d.tags, people: d.people, usedModel });
+        setDraft({
+          title: d.title,
+          summary: d.summary,
+          tags: d.tags,
+          people: d.people,
+          usedModel,
+        });
       })
       .catch((error) => {
         console.error("[checkin] draftToday failed:", error);
@@ -211,7 +223,7 @@ export function Checkin({
       mood: answers.mood,
       title: draft?.title ?? answers.highlight,
       summary,
-      summaryDraft: draft ? summary : "",
+      summaryDraft: draft?.summary ?? "",
       gratitude: answers.gratitude,
       tags: tags.slice(0, 4),
       voiceDurationSeconds: null,

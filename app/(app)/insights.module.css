@@ -191,3 +191,9 @@
   color: var(--fg-brand);
   cursor: pointer;
 }
+
+/* A day with no entry. Holds its slot so one entry does not stretch to fill
+   the chart, without implying a mood of zero. */
+.moodGap {
+  flex: 1;
+}
