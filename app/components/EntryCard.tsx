@@ -25,7 +25,8 @@ export function EntryCard({
       />
       <div className={styles.text}>
         <div className={styles.meta}>
-          {longDate(entry.entryDate)} · {MOOD_LABELS[entry.mood]}
+          {longDate(entry.entryDate)}
+          {entry.mood !== null ? ` · ${MOOD_LABELS[entry.mood]}` : ""}
         </div>
         <div className={styles.title}>{entry.title}</div>
       </div>

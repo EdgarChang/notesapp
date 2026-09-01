@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { Screen } from "@/app/components/AppShell";
 import { EntryCard } from "@/app/components/EntryCard";
-import { daysInMonth, ENTRIES, monthAndYear, PROFILE } from "@/app/lib/entries";
+import { daysInMonth, monthAndYear, todayIso } from "@/app/lib/entries";
+import { getEntriesForMonth, getRecentEntries } from "@/app/lib/queries";
 import { buildCalendar, countKept, DOW_LABELS } from "@/app/lib/timeline";
 import styles from "../timeline.module.css";
 
-export default function TimelinePage() {
-  const cells = buildCalendar();
+export const dynamic = "force-dynamic";
+
+export default async function TimelinePage() {
+  const today = todayIso();
+  const [monthEntries, recent] = await Promise.all([
+    getEntriesForMonth(today),
+    getRecentEntries(5),
+  ]);
+
+  const cells = buildCalendar(monthEntries, today);
   const kept = countKept(cells);
-  const total = daysInMonth(PROFILE.today);
+  const total = daysInMonth(today);
+  const monthLabel = monthAndYear(today);
 
   return (
     <Screen>
@@ -17,7 +27,7 @@ export default function TimelinePage() {
       </div>
 
       <div className={styles.head}>
-        <h3 className={styles.month}>{monthAndYear(PROFILE.today)}</h3>
+        <h3 className={styles.month}>{monthLabel}</h3>
         <div className={styles.kept}>
           {kept} of {total} kept
         </div>
@@ -44,13 +54,15 @@ export default function TimelinePage() {
                 ? styles.keptCell
                 : styles.empty;
 
-          if (cell.kind === "kept" && cell.entryId) {
+          const entryId = cell.kind === "empty" ? null : cell.entryId;
+
+          if (entryId) {
             return (
               <Link
                 key={i}
-                href={`/entry/${cell.entryId}`}
+                href={`/entry/${entryId}`}
                 className={`${styles.cell} ${tone} ${styles.linked}`}
-                aria-label={`Entry for ${monthAndYear(PROFILE.today)} ${cell.day}`}
+                aria-label={`Entry for ${monthLabel} ${cell.day}`}
               >
                 {cell.day}
               </Link>
@@ -65,12 +77,20 @@ export default function TimelinePage() {
         })}
       </div>
 
-      <h4 className={styles.sectionTitle}>Recently Kept</h4>
-      <div className={styles.entryList}>
-        {ENTRIES.map((entry) => (
-          <EntryCard key={entry.id} entry={entry} variant="roomy" />
-        ))}
-      </div>
+      {recent.length > 0 ? (
+        <>
+          <h4 className={styles.sectionTitle}>Recently Kept</h4>
+          <div className={styles.entryList}>
+            {recent.map((entry) => (
+              <EntryCard key={entry.id} entry={entry} variant="roomy" />
+            ))}
+          </div>
+        </>
+      ) : (
+        <p style={{ fontSize: 15, color: "var(--fg-3)" }}>
+          Nothing kept yet. Your first check-in will show up here.
+        </p>
+      )}
     </Screen>
   );
 }

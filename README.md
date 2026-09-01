@@ -96,19 +96,43 @@ every screen exists and reads from a seed module under `app/lib/`.
 
 ## Known facades
 
-These are expected until step 6 and are the whole of what is not real yet.
+What is real now: accounts, sessions, route protection, and entries. A check-in
+writes a row, and every screen reads from the database.
 
-- Nothing persists. Check-in answers and summary edits are discarded on
-  navigation, and onboarding does not save a name, topics or reminder time.
-- No auth, so `/onboarding` is reachable only by URL. First-run detection needs
-  a profile row to check against.
-- Every screen reads from `app/lib/entries.ts`, `insights.ts`, `timeline.ts` or
-  `onboarding.ts`. Swapping those for queries is step 6's job and should not
-  require touching a screen.
-- Voice recording is simulated: a toggle, an animated waveform and a canned
+What is not real yet:
+
+- **Voice is simulated.** The recording button animates and posts a canned
   transcript. Real capture needs `MediaRecorder` plus a transcription provider,
   which is still an open decision.
-- Photos are flat placeholder tiles. There is no real imagery in the design
-  bundle.
-- On Timeline, 19 of the 24 kept days are filler with no entry record behind
-  them, so they render kept but are not clickable.
+- **Photos do nothing.** The check-in offers a photo step but stores no file, so
+  `photo_key` stays null and entry detail never shows one. Media upload is step 8.
+- **No LLM.** The six questions are a hardcoded script and the summary draft is a
+  constant. Step 7 replaces both with Claude calls.
+- **No weekly note.** `weekly_notes` is never written, so the Insights statement
+  card stays hidden and the chart, people and quotes are composed from entries
+  directly. The scheduled job is step 8.
+- **"Named Most Often" is always empty.** It reads
+  `question_profiles.recurring_people`, which only the LLM pass populates.
+- **Email confirmation is off** for development, so anyone can register with an
+  address they do not own. Turn it back on, with custom SMTP, before real users.
+- **Timezone.** "Today" uses the server's date. A journal day is a calendar day
+  in the writer's timezone, which `profiles` does not store yet.
+
+## Empty states
+
+The design assumes a populated account: a twelve day streak, 84 days kept, five
+entries and a weekly note. It shows no empty state anywhere, so these were
+written to fill the gap and are not from the design:
+
+- Home's streak line changes with the real count, including zero, and the hero
+  switches to "Today, kept" once the day is written
+- "This Week" and the weekly note card are hidden when there is nothing to show
+- Timeline and Insights each carry a one line message instead of empty furniture
+
+## Missing from the design
+
+- **No account or settings screen.** Sign-out is parked at the bottom of
+  Insights because there is nowhere else for it, and the reminder time collected
+  during onboarding cannot be changed afterwards.
+- **No sign-in screen.** The one here follows the design system but was not
+  designed.

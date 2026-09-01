@@ -19,7 +19,8 @@ export type Entry = {
   id: string;
   /** ISO date. One entry per user per day, enforced by unique (user_id, entry_date). */
   entryDate: string;
-  mood: Mood;
+  /** Nullable: a check-in can be skipped past the mood question. */
+  mood: Mood | null;
   title: string;
   summary: string;
   gratitude: string;
@@ -28,134 +29,20 @@ export type Entry = {
   voiceDurationSeconds: number | null;
   /** Text of the entry from the same date a year earlier, if there is one. */
   lastYear: string | null;
-  /**
-   * Which of the five thumbnail tints this entry uses. Explicit rather than
-   * derived, because the prototype assigned tints at authoring time and index
-   * position is not stable once entries come from a database.
-   */
+  /** Derived from the id, so an entry keeps its colour for good. */
   tintIndex: 0 | 1 | 2 | 3 | 4;
 };
 
-export const ENTRIES: Entry[] = [
-  {
-    id: "a30",
-    entryDate: "2026-08-30",
-    mood: 4,
-    title: "Long walk, no phone. Called Mum.",
-    summary:
-      "Walked the loop by the reservoir with the phone in my bag. Called Mum on the way back and she talked about the garden for twenty minutes. Made too much pasta, ate it anyway.",
-    gratitude: "Mum picking up on the first ring.",
-    tags: ["Mum", "Outside", "Slow day"],
-    hasPhoto: true,
-    voiceDurationSeconds: 19,
-    lastYear:
-      "Aug 30, 2025 — First week in the new place. You wrote that the boxes could wait.",
-    tintIndex: 0,
-  },
-  {
-    id: "a29",
-    entryDate: "2026-08-29",
-    mood: 5,
-    title: "Maya’s birthday dinner at the loud place.",
-    summary:
-      "Maya’s birthday. The place was far too loud and nobody minded. Sam did the toast and got halfway through before losing it. Home at one, ears ringing.",
-    gratitude: "Old friends who still show up.",
-    tags: ["Maya", "Friends"],
-    hasPhoto: true,
-    voiceDurationSeconds: null,
-    lastYear:
-      "Aug 29, 2025 — A quiet one. You said you needed more nights like the loud ones.",
-    tintIndex: 1,
-  },
-  {
-    id: "a28",
-    entryDate: "2026-08-28",
-    mood: 2,
-    title: "Release slipped. Fixed it by six.",
-    summary:
-      "Release slipped in the morning and the afternoon went to finding out why. Fixed by six. Went home instead of staying to admire it.",
-    gratitude: "Priya staying on the call.",
-    tags: ["Work"],
-    hasPhoto: false,
-    voiceDurationSeconds: 8,
-    lastYear:
-      "Aug 28, 2025 — Same week, same kind of day. You noted you did not sleep.",
-    tintIndex: 2,
-  },
-  {
-    id: "a27",
-    entryDate: "2026-08-27",
-    mood: 3,
-    title: "Early swim. Quiet inbox.",
-    summary:
-      "Swam before work for the first time in months. The inbox stayed quiet until three, which felt suspicious but I took it.",
-    gratitude: "An empty lane at 6:30am.",
-    tags: ["Outside", "Work"],
-    hasPhoto: true,
-    voiceDurationSeconds: null,
-    lastYear: "Aug 27, 2025 — You wrote about wanting a morning routine that sticks.",
-    tintIndex: 3,
-  },
-  {
-    id: "a26",
-    entryDate: "2026-08-26",
-    mood: 4,
-    title: "Sam moved into the new flat.",
-    summary:
-      "Helped Sam shift boxes up four flights. He has one chair and enormous optimism. Ordered pizza on the floor.",
-    gratitude: "Sam finally getting his own place.",
-    tags: ["Sam", "Friends"],
-    hasPhoto: true,
-    voiceDurationSeconds: 22,
-    lastYear: "Aug 26, 2025 — You and Sam were still talking about him moving out.",
-    tintIndex: 4,
-  },
-];
-
-/** Stands in for the `profiles` row plus derived streak counts. */
-export const PROFILE = {
-  displayName: "Edgar",
-  /** "Playful" or "Brief". Surfaced as an onboarding setting in step 5. */
-  assistantTone: "Playful" as "Playful" | "Brief",
-  /** Today, per the prototype. Fixed so the seeded screens stay deterministic. */
-  today: "2026-08-31",
-  streakDays: 12,
-  entryCount: 84,
-  monthKept: 24,
-  weeklyTeaser:
-    "You write your best entries on the days you got outside first. Six of seven this week mentioned someone by name.",
-};
-
-export const TONIGHT_QUESTION: Record<typeof PROFILE.assistantTone, string> = {
-  Playful: "So — what happened today?",
-  Brief: "Ready when you are.",
-};
-
 /**
- * Today's entry, as it looks the moment the check-in is kept. The prototype
- * built this from component state; here it is seeded, because nothing persists
- * until step 6 wires the database. That means edits made in the check-in
- * summary box are lost on navigation, which is expected at this stage.
+ * Stable tint for an entry. Derived from the id rather than array position, so
+ * adding an entry never reshuffles the colours of the ones around it.
  */
-export const TODAY_ENTRY: Entry = {
-  id: "today",
-  entryDate: PROFILE.today,
-  mood: 4,
-  title: "Shipped the release. Dinner with Maya.",
-  summary:
-    "Ran 6k before the sun was properly up. Shipped the release and nothing broke. Dinner with Maya \u2014 she\u2019s set on the trip in October.",
-  gratitude: "Priya staying on the call until it was actually fixed.",
-  tags: ["Work", "Maya", "Outside"],
-  hasPhoto: false,
-  voiceDurationSeconds: 14,
-  lastYear:
-    "Aug 31, 2025 \u2014 A Sunday. You wrote three words: \u201cslept, read, nothing.\u201d",
-  tintIndex: 3,
-};
-
-export function getEntry(id: string): Entry | undefined {
-  if (id === TODAY_ENTRY.id) return TODAY_ENTRY;
-  return ENTRIES.find((e) => e.id === id);
+export function tintIndexFor(id: string): 0 | 1 | 2 | 3 | 4 {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) % 100000;
+  }
+  return (hash % 5) as 0 | 1 | 2 | 3 | 4;
 }
 
 /* ---------- Date formatting ----------
@@ -256,4 +143,25 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Today as an ISO date, in the server's timezone.
+ *
+ * A journal day is a calendar day in the writer's own timezone, which we do not
+ * store yet. Until profiles carries a timezone, someone journalling late at
+ * night from a different zone than the server can see the date roll early.
+ */
+export function todayIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Same calendar date, one year earlier. */
+export function oneYearBefore(isoDate: string): string {
+  const { y, m, d } = parts(isoDate);
+  return `${y - 1}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }

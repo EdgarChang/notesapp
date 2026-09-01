@@ -2,14 +2,11 @@ import { notFound } from "next/navigation";
 import { Screen } from "@/app/components/AppShell";
 import { BackButton } from "@/app/components/BackButton";
 import { STATIC_BARS } from "@/app/lib/checkin";
-import {
-  formatDuration,
-  getEntry,
-  longDate,
-  MOOD_LABELS,
-  weekdayName,
-} from "@/app/lib/entries";
+import { formatDuration, longDate, MOOD_LABELS, weekdayName } from "@/app/lib/entries";
+import { getEntry } from "@/app/lib/queries";
 import styles from "../entry.module.css";
+
+export const dynamic = "force-dynamic";
 
 export default async function EntryPage({
   params,
@@ -17,7 +14,9 @@ export default async function EntryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const entry = getEntry(id);
+  const entry = await getEntry(id);
+  // RLS makes another user's entry indistinguishable from a missing one, which
+  // is the right answer to give either way.
   if (!entry) notFound();
 
   return (
@@ -32,14 +31,18 @@ export default async function EntryPage({
         </div>
         <h3 className={styles.date}>{longDate(entry.entryDate)}</h3>
 
-        <div className={styles.pills}>
-          <span className={styles.moodPill}>{MOOD_LABELS[entry.mood]}</span>
-          {entry.tags.map((tag) => (
-            <span key={tag} className={styles.tagPill}>
-              {tag}
-            </span>
-          ))}
-        </div>
+        {entry.mood !== null || entry.tags.length > 0 ? (
+          <div className={styles.pills}>
+            {entry.mood !== null ? (
+              <span className={styles.moodPill}>{MOOD_LABELS[entry.mood]}</span>
+            ) : null}
+            {entry.tags.map((tag) => (
+              <span key={tag} className={styles.tagPill}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {entry.hasPhoto ? (
           <div className={styles.photo}>
@@ -49,7 +52,7 @@ export default async function EntryPage({
           </div>
         ) : null}
 
-        <p className={styles.summary}>{entry.summary}</p>
+        {entry.summary ? <p className={styles.summary}>{entry.summary}</p> : null}
 
         {entry.voiceDurationSeconds !== null ? (
           <div className={styles.voice}>
@@ -59,18 +62,16 @@ export default async function EntryPage({
               </div>
               <div className={styles.waveform} aria-hidden="true">
                 {STATIC_BARS.map((height, i) => (
-                  <div
-                    key={i}
-                    className={styles.bar}
-                    style={{ height: `${height}px` }}
-                  />
+                  <div key={i} className={styles.bar} style={{ height: `${height}px` }} />
                 ))}
               </div>
               <div className={styles.voiceDuration}>
                 {formatDuration(entry.voiceDurationSeconds)}
               </div>
             </div>
-            <div className={styles.gratitude}>Grateful for: {entry.gratitude}</div>
+            {entry.gratitude ? (
+              <div className={styles.gratitude}>Grateful for: {entry.gratitude}</div>
+            ) : null}
           </div>
         ) : null}
 

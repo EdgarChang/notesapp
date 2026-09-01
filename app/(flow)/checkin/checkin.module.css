@@ -496,3 +496,19 @@
   padding: 6px;
   cursor: pointer;
 }
+
+.saveError {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 4px;
+  color: var(--brand-text);
+  background: var(--tint-50);
+  border: 1.5px solid var(--tint-100);
+}
+
+.keep:disabled {
+  opacity: 0.65;
+  cursor: default;
+  box-shadow: none;
+}

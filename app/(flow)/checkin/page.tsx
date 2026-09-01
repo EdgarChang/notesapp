@@ -1,6 +1,9 @@
-import { PROFILE } from "@/app/lib/entries";
+import { getProfile } from "@/app/lib/queries";
 import { Checkin } from "./Checkin";
 
-export default function CheckinPage() {
-  return <Checkin tone={PROFILE.assistantTone} />;
+export const dynamic = "force-dynamic";
+
+export default async function CheckinPage() {
+  const profile = await getProfile();
+  return <Checkin tone={profile?.assistantTone ?? "Playful"} />;
 }

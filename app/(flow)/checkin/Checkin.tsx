@@ -14,7 +14,8 @@ import {
   TIMING,
   type AssistantTone,
 } from "@/app/lib/checkin";
-import { formatDuration } from "@/app/lib/entries";
+import { saveCheckin } from "@/app/lib/actions";
+import { formatDuration, MOOD_LABELS, type Mood } from "@/app/lib/entries";
 import styles from "./checkin.module.css";
 
 type Message =
@@ -47,6 +48,17 @@ export function Checkin({
   const [draft, setDraft] = useState("");
   const [recording, setRecording] = useState(false);
   const [summary, setSummary] = useState(DRAFT_SUMMARY);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // What the six steps actually collected, for the row we write at the end.
+  const [answers, setAnswers] = useState<{
+    mood: Mood | null;
+    title: string | null;
+    gratitude: string | null;
+    voiceDurationSeconds: number | null;
+    tags: string[];
+  }>({ mood: null, title: null, gratitude: null, voiceDurationSeconds: null, tags: [] });
 
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
@@ -119,6 +131,20 @@ export function Checkin({
 
   const answerText = (text: string) => {
     if (!current) return;
+
+    if (current.kind === "chips") {
+      const mood = (Object.keys(MOOD_LABELS) as unknown as Mood[]).find(
+        (m) => MOOD_LABELS[m] === text,
+      );
+      setAnswers((a) => ({ ...a, mood: mood ?? null }));
+    } else if (current.kind === "text") {
+      setAnswers((a) => ({ ...a, title: text }));
+    } else if (current.kind === "yesno" && text === "Yep") {
+      // The daylight question is the only yes/no in the script, and a yes is
+      // worth keeping as a tag.
+      setAnswers((a) => ({ ...a, tags: [...new Set([...a.tags, "Outside"])] }));
+    }
+
     advance({ from: "user", kind: "text", text }, current.ack);
   };
 
@@ -134,6 +160,11 @@ export function Checkin({
       return;
     }
     setRecording(false);
+    setAnswers((a) => ({
+      ...a,
+      gratitude: CANNED_VOICE.transcript,
+      voiceDurationSeconds: CANNED_VOICE.durationSeconds,
+    }));
     advance(
       {
         from: "user",
@@ -372,12 +403,38 @@ export function Checkin({
               onChange={(e) => setSummary(e.target.value)}
               aria-label="Your day in three lines"
             />
+            {saveError ? (
+              <div className={styles.saveError} role="alert">
+                {saveError}
+              </div>
+            ) : null}
             <button
               type="button"
               className={styles.keep}
-              onClick={() => router.push("/entry/today")}
+              disabled={saving}
+              onClick={async () => {
+                if (saving) return;
+                setSaving(true);
+                setSaveError(null);
+                const result = await saveCheckin({
+                  mood: answers.mood,
+                  title: answers.title,
+                  summary,
+                  summaryDraft: DRAFT_SUMMARY,
+                  gratitude: answers.gratitude,
+                  tags: answers.tags,
+                  voiceDurationSeconds: answers.voiceDurationSeconds,
+                });
+                if (!result.ok) {
+                  setSaveError(result.error);
+                  setSaving(false);
+                  return;
+                }
+                router.refresh();
+                router.push(`/entry/${result.id}`);
+              }}
             >
-              Keep this day
+              {saving ? "Keeping…" : "Keep this day"}
             </button>
           </div>
         ) : null}
