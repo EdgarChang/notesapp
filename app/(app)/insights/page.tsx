@@ -1,4 +1,5 @@
 import { Screen } from "@/app/components/AppShell";
+import { createClient } from "@/app/lib/supabase/server";
 import {
   moodBarHeight,
   moodTone,
@@ -13,8 +14,13 @@ const TONE_CLASS = {
   low: styles.moodLow,
 } as const;
 
-export default function InsightsPage() {
+export default async function InsightsPage() {
   const { moodSeries, moodAxis, topPeople, gratitudeQuotes } = WEEKLY_NOTE;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <Screen>
@@ -78,6 +84,15 @@ export default function InsightsPage() {
           ))}
         </div>
       </section>
+
+      <div className={styles.account}>
+        <span className={styles.accountEmail}>{user?.email}</span>
+        <form action="/auth/signout" method="post">
+          <button type="submit" className={styles.signOut}>
+            Sign out
+          </button>
+        </form>
+      </div>
     </Screen>
   );
 }
