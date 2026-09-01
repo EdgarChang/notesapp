@@ -16,8 +16,12 @@ alter table entries           enable row level security;
 alter table question_profiles enable row level security;
 alter table weekly_notes      enable row level security;
 
--- Force the policies to apply to the table owner too, so a future definer
--- function cannot quietly read across users.
+-- Force the policies to apply to the table owner too. This is defence in depth,
+-- not a guarantee. These tables are owned by `postgres`, which holds BYPASSRLS,
+-- and BYPASSRLS beats FORCE. So a security definer function owned by postgres
+-- still reads and writes across every user. handle_new_user in 0001 is exactly
+-- that, and it is why signup can insert a profile row before a session exists.
+-- Any such function has to scope by user_id itself.
 alter table profiles          force row level security;
 alter table entries           force row level security;
 alter table question_profiles force row level security;
