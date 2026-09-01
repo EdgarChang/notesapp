@@ -11,10 +11,10 @@ Mobile-first: a single 452px column centred on larger screens.
 |---|---|
 | Framework | Next.js 16 (App Router), React 19, TypeScript |
 | Styling | Plain CSS: global design tokens plus CSS Modules per component |
-| Data | Postgres via Supabase, owner-scoped with RLS (not yet wired) |
-| Auth | Supabase Auth (not yet wired) |
+| Data | Postgres via Supabase, owner-scoped with RLS |
+| Auth | Supabase Auth, email and password |
 | Media | Supabase Storage, private bucket, signed URLs (not yet wired) |
-| LLM | Claude API via `@anthropic-ai/sdk`, server routes only (not yet wired) |
+| LLM | Claude API via `@anthropic-ai/sdk`, server-side only |
 
 No Tailwind. The design is specified as exact pixel values over CSS custom
 properties, so tokens plus CSS Modules maps onto it directly. Tailwind would add a
@@ -48,7 +48,11 @@ app/
   fonts.ts              Montserrat variable, self-hosted
   fonts/                subsetted woff2 + OFL licence
   components/           AppShell, TabBar, EntryCard, BackButton
-  lib/                  seed data, shaped to the target schema
+  lib/                  queries, server actions, and the LLM seam
+    queries.ts          all reads, server-only
+    actions.ts          writes: saveCheckin, draftToday, recordPeople
+    llm.ts              the provider seam: draftDay + fallback
+  auth/                 callback and signout route handlers
   (app)/                screens that carry the tab bar
     page.tsx            Today
     timeline/page.tsx   Timeline
@@ -82,16 +86,16 @@ other two are corrected at the token level too.
 
 ## Build order
 
-Screens first against seeded data, backend second. Steps 1 to 5 are done, so
-every screen exists and reads from a seed module under `app/lib/`.
+Screens first against seeded data, backend second.
 
 1. **Done.** Scaffold, fonts, tokens, 452px shell, tab bar.
 2. **Done.** Home, against a seeded entries array.
 3. **Done.** Check-in, against the prototype's hardcoded six-step script. No LLM yet.
 4. **Done.** Entry detail, then Timeline, then Insights.
 5. **Done.** Onboarding.
-6. Supabase project, schema, auth, RLS, then real queries.
-7. Claude API: question picker, then summary drafting.
+6. **Done.** Supabase project, schema, auth, RLS, then real queries.
+7. **Partly done.** Claude drafts the day's summary. The question picker is not
+   built, so the six questions are still a fixed script.
 8. Media upload, then the weekly note job.
 
 ## Known facades
@@ -106,8 +110,9 @@ What is not real yet:
   `voice_duration_seconds` stay null and entry detail never shows a player for a
   file that does not exist. Real capture needs `MediaRecorder`, a private
   Storage bucket, and a transcription provider, which is still an open decision.
-- **Photos do nothing.** The check-in offers a photo step but stores no file, so
-  `photo_key` stays null and entry detail never shows one. Media upload is step 8.
+- **Photos store no file.** The photo step posts a placeholder bubble with a
+  fabricated filename and writes nothing, so `photo_key` stays null. Entry detail
+  never shows a photo. Media upload is step 8.
 - **The question script is still hardcoded.** Claude drafts the summary, but does
   not yet pick the questions. `app/lib/checkin.ts` holds the six steps, shaped to
   the picker's output schema so it can be swapped without UI changes.
@@ -116,8 +121,6 @@ What is not real yet:
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.
-- **Photos store no file.** The photo step posts a placeholder bubble with a
-  fabricated filename and writes nothing, so `photo_key` stays null.
 - **Email confirmation is off** for development, so anyone can register with an
   address they do not own. Turn it back on, with custom SMTP, before real users.
 - **Timezone.** "Today" uses the server's date. A journal day is a calendar day
