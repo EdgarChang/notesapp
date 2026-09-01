@@ -81,7 +81,7 @@ export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
   const sentences: string[] = [];
   if (answers.highlight) sentences.push(`${answers.highlight.replace(/\.$/, "")}.`);
   if (answers.outside === true) sentences.push("Got outside at some point.");
-  if (answers.gratitude) sentences.push(`Grateful for ${lowerFirst(answers.gratitude)}`);
+  if (answers.gratitude) sentences.push(`Grateful for ${asSentenceTail(answers.gratitude)}`);
 
   const tags: string[] = [];
   if (answers.outside === true) tags.push("Outside");
@@ -94,10 +94,17 @@ export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
   };
 }
 
-function lowerFirst(text: string): string {
+/**
+ * Tidy the user's text onto the end of a sentence without altering their words.
+ *
+ * An earlier version lowercased the first letter, which read better for
+ * "The tide being out" but turned "Priya not giving up" into "priya not giving
+ * up". Mangling a name is worse than an awkward capital, so the text is left
+ * exactly as written and only the full stop is normalised.
+ */
+function asSentenceTail(text: string): string {
   const trimmed = text.trim();
-  const body = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
-  return body.endsWith(".") ? body : `${body}.`;
+  return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
 }
 
 /** True when a key is configured. Lets callers skip the round trip entirely. */
