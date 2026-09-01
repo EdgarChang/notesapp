@@ -17,6 +17,33 @@ export type Step = {
 
 export type AssistantTone = "Playful" | "Brief";
 
+/**
+ * The open invitation, asked every night after the selected prompts.
+ *
+ * Not from the bank: the bank's only long_text prompts are the weekly and
+ * monthly tiers, so without this there is no free-write on an ordinary night.
+ *
+ * Fixed wording rather than reworded by the picker. It is furniture, not a
+ * question, and an invitation that reads the same every night is easier to
+ * accept than one that keeps rephrasing itself.
+ *
+ * Its id is local, never logged to prompt_history: it is shown every night, so
+ * the fourteen day no-repeat rule does not apply to it and recording it would
+ * only crowd out the prompts the rule exists for.
+ */
+export const FREE_WRITE_ID = "open";
+
+const FREE_WRITE: Prompt = {
+  id: FREE_WRITE_ID,
+  text: "Anything else on your mind? Write as much or as little as you like.",
+  cadence: "daily_pool",
+  category: "ephemera",
+  response_type: "long_text",
+  tone: "neutral",
+  // Neutral and open, so it is also a safe last thing to read before closing.
+  valence: "neutral",
+};
+
 export { PROMPT_VERSION };
 
 const PLACEHOLDERS: Partial<Record<ResponseType, string>> = {
@@ -56,6 +83,14 @@ export function buildSteps(selection: Selection): Step[] {
       placeholder: PLACEHOLDERS.long_text,
     });
   }
+
+  // Always last, so whatever they write in their own words is the final thing
+  // said before the day is kept, and lands at the end of the summary.
+  steps.push({
+    prompt: FREE_WRITE,
+    isAnchor: false,
+    placeholder: PLACEHOLDERS.long_text,
+  });
 
   return steps;
 }

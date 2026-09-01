@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { todayIso } from "./entries";
-import type { Step } from "./checkin";
+import { FREE_WRITE_ID, type Step } from "./checkin";
 import { PROMPT_VERSION } from "./prompts";
 import {
   composeFallbackDraft,
@@ -120,9 +120,12 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
 
   // What was shown tonight, answered or not. Skipping is recorded separately
   // from never-shown, because repeated skipping is a signal to down-weight.
-  if (input.promptAnswers.length > 0) {
+  // The free-write is excluded: it is shown every night, so logging it would
+  // only crowd the table the no-repeat rule reads.
+  const fromBank = input.promptAnswers.filter((a) => a.promptId !== FREE_WRITE_ID);
+  if (fromBank.length > 0) {
     const { error: historyError } = await supabase.from("prompt_history").upsert(
-      input.promptAnswers.map((a) => ({
+      fromBank.map((a) => ({
         user_id: user.id,
         prompt_id: a.promptId,
         shown_on: todayIso(),

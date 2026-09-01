@@ -2,7 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { Step } from "./checkin";
+import { FREE_WRITE_ID, type Step } from "./checkin";
 import type { Moment } from "./retrospect";
 import type { Mood } from "./entries";
 
@@ -314,6 +314,8 @@ export async function pickNextQuestion(
   // Anchor wording is frozen. Rewording one would break comparability with
   // every answer given to it before, which is the whole reason anchors exist.
   if (step.isAnchor) return null;
+  // The open invitation is deliberately the same every night.
+  if (step.prompt.id === FREE_WRITE_ID) return null;
 
   try {
     const client = new Anthropic();

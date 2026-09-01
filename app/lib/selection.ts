@@ -164,7 +164,13 @@ export function selectPrompts(input: SelectionInput): Selection {
   };
 }
 
-/** Roughly how long the night's set should take, for the ninety second budget. */
+/**
+ * Roughly how long the night's set should take, for the ninety second budget.
+ *
+ * Excludes the open invitation appended after these: it is skippable in one
+ * tap, and time someone chooses to spend writing is not time the app is asking
+ * of them.
+ */
 export function estimateSeconds(selection: Selection): number {
   const perType: Record<string, number> = {
     scale_0_10: 4,
