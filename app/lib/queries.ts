@@ -1,5 +1,4 @@
 import "server-only";
-import { NO_REPEAT_DAYS } from "./selection";
 import {
   dayOfWeek,
   daysInMonth,
@@ -445,7 +444,6 @@ export async function getRetrospect(
 
 /** Everything the selection algorithm needs about this person's history. */
 export async function getSelectionContext(today: string): Promise<{
-  recentlyShown: string[];
   oftenSkipped: string[];
   entryCount: number;
   monthlyDue: boolean;
@@ -453,35 +451,36 @@ export async function getSelectionContext(today: string): Promise<{
 }> {
   const supabase = await createClient();
 
-  const since = new Date(`${today}T00:00:00Z`);
-  since.setUTCDate(since.getUTCDate() - NO_REPEAT_DAYS);
-  const sinceIso = since.toISOString().slice(0, 10);
-
-  const [{ data: recent }, { data: history }, { count }, people] = await Promise.all([
-    supabase
-      .from("prompt_history")
-      .select("prompt_id")
-      .gte("shown_on", sinceIso),
-    supabase.from("prompt_history").select("prompt_id, answered, skipped"),
+  const [{ data: rows }, { count }, people] = await Promise.all([
+    // Skip rates come from the entries themselves. The separate prompt_history
+    // table was dropped with the no-repeat rule: everything it held was already
+    // here, and a second copy of derivable facts is what let the old people
+    // tally drift.
+    supabase.from("entries").select("prompt_responses"),
     supabase.from("entries").select("id", { count: "exact", head: true }),
     getTopPeople(6),
   ]);
 
-  // Skipped more often than answered. Down-weighted rather than barred, since a
-  // prompt someone skips on a Tuesday may land on a Sunday.
   const tally = new Map<string, { answered: number; skipped: number }>();
-  for (const row of history ?? []) {
-    const t = tally.get(row.prompt_id) ?? { answered: 0, skipped: 0 };
-    if (row.answered) t.answered++;
-    if (row.skipped) t.skipped++;
-    tally.set(row.prompt_id, t);
+  for (const row of rows ?? []) {
+    const responses = (row.prompt_responses ?? []) as {
+      prompt_id?: string;
+      skipped?: boolean;
+    }[];
+    for (const r of responses) {
+      if (!r.prompt_id) continue;
+      const t = tally.get(r.prompt_id) ?? { answered: 0, skipped: 0 };
+      if (r.skipped) t.skipped++;
+      else t.answered++;
+      tally.set(r.prompt_id, t);
+    }
   }
 
-  const { d } = { d: Number(today.slice(8, 10)) };
-  const lastOfMonth = daysInMonth(today);
+  const d = Number(today.slice(8, 10));
 
   return {
-    recentlyShown: [...new Set((recent ?? []).map((r) => r.prompt_id as string))],
+    // Skipped more often than answered. Down-weighted rather than barred, since
+    // a prompt someone skips on a Tuesday may land on a Sunday.
     oftenSkipped: [...tally.entries()]
       .filter(([, t]) => t.skipped > t.answered)
       .map(([id]) => id),
@@ -489,7 +488,7 @@ export async function getSelectionContext(today: string): Promise<{
     // The monthly tier fires on the last day of the month. A user who never
     // opens the app that day simply misses it; catching up would mean asking a
     // month-shaped question about a month that has already ended.
-    monthlyDue: d === lastOfMonth,
+    monthlyDue: d === daysInMonth(today),
     knownPeople: people.map((p) => p.name),
   };
 }

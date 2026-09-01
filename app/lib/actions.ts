@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { todayIso } from "./entries";
-import { FREE_WRITE_ID, type Step } from "./checkin";
+import type { Step } from "./checkin";
 import { PROMPT_VERSION } from "./prompts";
 import {
   composeFallbackDraft,
@@ -25,6 +25,12 @@ import { createClient } from "./supabase/server";
 
 export type PromptAnswer = {
   promptId: string;
+  /**
+   * The question as it was actually put, which the picker may have reworded.
+   * Stored with the answer so looking back does not mean guessing which
+   * wording produced it.
+   */
+  question: string;
   responseType: string;
   /** Null when the prompt was shown and skipped. */
   value: string | null;
@@ -96,8 +102,9 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
         anchor_responses: input.anchors,
         prompt_responses: input.promptAnswers.map((a) => ({
           prompt_id: a.promptId,
-          // Stored per response: prompt text will drift, and answers must stay
-          // interpretable against the wording that produced them.
+          question_text: a.question,
+          // The bank version too, so a canonical prompt can still be traced
+          // even though question_text is what was shown.
           prompt_version: PROMPT_VERSION,
           response_type: a.responseType,
           value: a.value,
@@ -120,25 +127,6 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
 
   // What was shown tonight, answered or not. Skipping is recorded separately
   // from never-shown, because repeated skipping is a signal to down-weight.
-  // The free-write is excluded: it is shown every night, so logging it would
-  // only crowd the table the no-repeat rule reads.
-  const fromBank = input.promptAnswers.filter((a) => a.promptId !== FREE_WRITE_ID);
-  if (fromBank.length > 0) {
-    const { error: historyError } = await supabase.from("prompt_history").upsert(
-      fromBank.map((a) => ({
-        user_id: user.id,
-        prompt_id: a.promptId,
-        shown_on: todayIso(),
-        answered: a.value !== null,
-        skipped: a.value === null,
-      })),
-      { onConflict: "user_id,prompt_id,shown_on" },
-    );
-    if (historyError) {
-      console.error("[actions] prompt_history:", historyError.message);
-    }
-  }
-
   revalidatePath("/");
   revalidatePath("/timeline");
   revalidatePath("/insights");

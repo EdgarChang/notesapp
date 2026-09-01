@@ -14,14 +14,16 @@ import {
  * The shape is one anchor screen plus two rotating prompts, under ninety
  * seconds. Completion collapses past that, and an abandoned journal preserves
  * nothing, so the budget is a design constraint rather than a preference.
+ *
+ * The spec's fourteen day no-repeat rule is deliberately not implemented. With
+ * day bias, the one-category-per-session rule and cold-start filtering already
+ * narrowing the pool, barring anything seen recently thinned it further than it
+ * was worth. Weighting still spreads prompts out, and repeated skipping still
+ * down-weights, so the same question can now recur sooner. That is the tradeoff.
  */
-
-export const NO_REPEAT_DAYS = 14;
 
 export type SelectionInput = {
   today: string;
-  /** Prompt ids shown in the last NO_REPEAT_DAYS days. */
-  recentlyShown: string[];
   /** Prompt ids skipped more often than answered, down-weighted rather than barred. */
   oftenSkipped: string[];
   /** 0 = Sunday. The weekly tier fires on this day. */
@@ -88,12 +90,10 @@ const COLD_START_CATEGORIES = new Set(["playful", "ephemera"]);
 export function selectPrompts(input: SelectionInput): Selection {
   const rand = rng(input.seed);
   const weekend = [0, 6].includes(dayOfWeek(input.today));
-  const recent = new Set(input.recentlyShown);
   const skipped = new Set(input.oftenSkipped);
   const coldStart = input.entryCount < COLD_START_ENTRIES;
 
   const eligible = POOL.filter((p) => {
-    if (recent.has(p.id)) return false;
     // Tuesday deserves "what did you eat", Saturday "the best twenty minutes".
     if (p.day_bias === "weekend" && !weekend) return false;
     if (p.day_bias === "weekday" && weekend) return false;
@@ -147,9 +147,7 @@ export function selectPrompts(input: SelectionInput): Selection {
   const last = rotating[rotating.length - 1];
   if (last?.valence === "negative") {
     const closer =
-      CLOSERS.filter((c) => !recent.has(c.id) && !usedCategories.has(c.category))[0] ??
-      CLOSERS.filter((c) => !usedCategories.has(c.category))[0] ??
-      CLOSERS[0];
+      CLOSERS.filter((c) => !usedCategories.has(c.category))[0] ?? CLOSERS[0];
     if (closer) rotating.push(closer);
   }
 

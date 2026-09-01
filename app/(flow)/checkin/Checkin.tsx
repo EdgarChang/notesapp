@@ -48,11 +48,8 @@ export function Checkin({
   /** a001 on 0-10, the trend line. */
   const [mood, setMood] = useState<number | null>(null);
   const [anchors, setAnchors] = useState<Record<string, string>>({});
+  /** Each answer carries the question as asked, which is also what the model needs. */
   const [answers, setAnswers] = useState<PromptAnswer[]>([]);
-  /** Question and answer together, which is what the model needs. */
-  const [pairs, setPairs] = useState<
-    { question: string; answer: string; responseType: string }[]
-  >([]);
 
   const [activeStep, setActiveStep] = useState<Step | null>(null);
 
@@ -64,14 +61,12 @@ export function Checkin({
   const lastAnswerRef = useRef<string | null>(null);
   const answersRef = useRef(answers);
   const anchorsRef = useRef(anchors);
-  const pairsRef = useRef(pairs);
   const moodRef = useRef<number | null>(null);
   useEffect(() => {
     answersRef.current = answers;
     anchorsRef.current = anchors;
-    pairsRef.current = pairs;
     moodRef.current = mood;
-  }, [answers, anchors, pairs, mood]);
+  }, [answers, anchors, mood]);
 
   const later = useCallback((fn: () => void, ms: number) => {
     timers.current.push(setTimeout(fn, ms));
@@ -101,7 +96,13 @@ export function Checkin({
         .split(",")
         .map((n) => n.trim())
         .filter(Boolean),
-      responses: pairsRef.current,
+      responses: answersRef.current
+        .filter((a) => a.value)
+        .map((a) => ({
+          question: a.question,
+          answer: a.value as string,
+          responseType: a.responseType,
+        })),
     }),
     [],
   );
@@ -181,19 +182,14 @@ export function Checkin({
       } else {
         setAnswers((a) => [
           ...a,
-          { promptId: prompt.id, responseType: prompt.response_type, value },
+          {
+            promptId: prompt.id,
+            // As asked, which the picker may have reworded.
+            question: (activeStep ?? step).prompt.text,
+            responseType: prompt.response_type,
+            value,
+          },
         ]);
-        if (value !== null) {
-          setPairs((p) => [
-            ...p,
-            {
-              // The question as asked, which the picker may have reworded.
-              question: (activeStep ?? step).prompt.text,
-              answer: value,
-              responseType: prompt.response_type,
-            },
-          ]);
-        }
       }
 
       setInputText("");

@@ -27,9 +27,9 @@ export type AssistantTone = "Playful" | "Brief";
  * question, and an invitation that reads the same every night is easier to
  * accept than one that keeps rephrasing itself.
  *
- * Its id is local, never logged to prompt_history: it is shown every night, so
- * the fourteen day no-repeat rule does not apply to it and recording it would
- * only crowd out the prompts the rule exists for.
+ * Its id is local rather than from the bank, so it never competes with the
+ * selected prompts. It is shown every night by design, so it carries no
+ * selection weight and no skip signal.
  */
 export const FREE_WRITE_ID = "open";
 

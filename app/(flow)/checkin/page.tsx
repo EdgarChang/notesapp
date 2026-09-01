@@ -15,7 +15,6 @@ export default async function CheckinPage() {
 
   const selection = selectPrompts({
     today,
-    recentlyShown: context.recentlyShown,
     oftenSkipped: context.oftenSkipped,
     weeklyDay: profile?.weeklyPromptDay ?? 0,
     monthlyDue: context.monthlyDue,
