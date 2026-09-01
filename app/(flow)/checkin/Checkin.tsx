@@ -312,9 +312,7 @@ export function Checkin({
       mood: answers.mood,
       title: draft?.title ?? answers.highlight,
       summary,
-      // Nothing was drafted when the summary is their own words, so there is
-      // no draft to compare against.
-      summaryDraft: draft && !draft.verbatim ? draft.summary : "",
+      summaryDraft: draft?.summary ?? "",
       gratitude: answers.gratitude,
       tags: tags.slice(0, 4),
       voiceDurationSeconds: null,
@@ -526,7 +524,9 @@ export function Checkin({
             {drafting ? (
               <div className={styles.draftNote}>Writing your day&hellip;</div>
             ) : draft?.verbatim ? (
-              <div className={styles.draftNote}>Your words, kept as you wrote them.</div>
+              <div className={styles.draftNote}>
+                Your own words are at the end, exactly as you wrote them.
+              </div>
             ) : draft && !draft.usedModel ? (
               <div className={styles.draftNote}>
                 Put together from your answers. Edit it into your own words.

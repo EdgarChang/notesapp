@@ -107,10 +107,14 @@ seeded from the user and the date, so it is stable for a whole check-in but
 different from yesterday's.
 
 One of those four is open-ended: write whatever you like about the day, in a
-textarea rather than a single line. **Whatever you write there becomes the
-summary word for word.** The model still supplies the title, tags and people, but
-its summary is discarded rather than trusted to have left your text alone, and
-`summary_draft` is stored empty because nothing was drafted to compare against.
+textarea rather than a single line. The entry then reads as a summary of your
+other answers, followed by **your own words, unchanged, at the end**. The join is
+what guarantees that, not the prompt.
+
+The open text is passed to the model under its own key rather than alongside the
+other answers, because the instruction not to summarise it was ignored when it
+sat in the same list: the model folded it into the summary and the entry said
+the same thing twice. It is used for the title, tags and people only.
 
 One Haiku call per step returns both a reply to the answer just given and the
 next question, reworded for this person. It receives their focus topics, recent

@@ -59,12 +59,15 @@ Voice:
 
 Rules:
 - Invent nothing. Every detail must come from their answers. If they mentioned no people, return an empty people array.
-- If "In their own words" is present, that text is the summary and the caller uses it verbatim. Do not rewrite, tidy, shorten or extend it. Return it unchanged as the summary, and spend your effort on the title, tags and people instead.
+- Your summary covers \`answersToSummarise\` and nothing else.
+- \`alreadyWrittenByTheUser_neverSummarise\` is text the person wrote themselves. It is printed unchanged directly beneath your summary. It is not material for your summary: do not restate it, paraphrase it, draw details from it, or continue it. If you mention the cat they wrote about, the entry says it twice.
+- You may read it for the title, tags and people only.
+- If \`answersToSummarise\` is null or holds nothing worth a sentence, return an empty summary. An empty summary is correct and expected when someone only wrote their own words.
 - title: one short line, lowercase after the first word, no trailing full stop.
 - tags: at most four, one or two words each, drawn from what they actually said.
 - people: first names only, exactly as they wrote them.`;
 
-function buildUserContent(answers: CheckinAnswers): string {
+function buildDraftContent(answers: CheckinAnswers): string {
   const lines: string[] = [];
   if (answers.mood !== null) {
     lines.push(`How the day landed: ${MOOD_LABELS[answers.mood]}`);
@@ -77,9 +80,6 @@ function buildUserContent(answers: CheckinAnswers): string {
   }
   if (answers.gratitude) {
     lines.push(`Grateful for: ${answers.gratitude}`);
-  }
-  if (answers.open) {
-    lines.push(`In their own words: ${answers.open}`);
   }
   return lines.join("\n");
 }
@@ -98,21 +98,15 @@ export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
   if (answers.outside === true) sentences.push("Got outside at some point.");
   if (answers.gratitude) sentences.push(`Grateful for ${asSentenceTail(answers.gratitude)}`);
 
-  // Their own words stand alone. Nothing is added around them.
-  if (answers.open) {
-    return {
-      title: answers.highlight?.replace(/\.$/, "") ?? firstWords(answers.open),
-      summary: answers.open.trim(),
-      tags: answers.outside === true ? ["Outside"] : [],
-      people: [],
-    };
-  }
+
 
   const tags: string[] = [];
   if (answers.outside === true) tags.push("Outside");
 
   return {
-    title: answers.highlight?.replace(/\.$/, "") ?? "A day kept",
+    title:
+      answers.highlight?.replace(/\.$/, "") ??
+      (answers.open ? firstWords(answers.open) : "A day kept"),
     summary: sentences.join(" ").trim(),
     tags,
     people: [],
@@ -155,8 +149,21 @@ export function llmConfigured(): boolean {
 export async function draftDay(answers: CheckinAnswers): Promise<DayDraft | null> {
   if (!llmConfigured()) return null;
 
-  const content = buildUserContent(answers);
-  if (!content.trim()) return null;
+  const answered = buildDraftContent(answers);
+  const ownWords = answers.open?.trim() ?? "";
+  if (!answered.trim() && !ownWords) return null;
+
+  const content = JSON.stringify(
+    {
+      answersToSummarise: answered || null,
+      // Deliberately a separate key with a name that states the contract. The
+      // same instruction inside the answer list was ignored: the model folded
+      // this text into its summary, and the entry then said it twice.
+      alreadyWrittenByTheUser_neverSummarise: ownWords || null,
+    },
+    null,
+    1,
+  );
 
   try {
     const client = new Anthropic();

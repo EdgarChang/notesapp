@@ -93,13 +93,14 @@ export async function draftToday(
   const drafted = await draftDay(answers);
   const base = drafted ?? composeFallbackDraft(answers);
 
-  // If they wrote their own account of the day, it is the summary, exactly as
-  // typed. The prompt says so too, but this is the guarantee: the model's
-  // summary is discarded rather than trusted to have left the text alone. It
-  // still contributes the title, tags and people.
+  // Their own words are appended after the summary of everything else, never
+  // folded into it. The prompt asks for this too, but the join is what
+  // guarantees it: whatever the model returns, the user's text is added
+  // unchanged and is the last thing in the entry.
   if (own) {
+    const summary = [base.summary.trim(), own].filter(Boolean).join("\n\n");
     return {
-      draft: { ...base, summary: own },
+      draft: { ...base, summary },
       usedModel: drafted !== null,
       verbatim: true,
     };
