@@ -111,6 +111,11 @@ textarea rather than a single line. The entry then reads as a summary of your
 other answers, followed by **your own words, unchanged, at the end**. The join is
 what guarantees that, not the prompt.
 
+Whatever you type into the summary box at the last step is read once more on
+save, so a name added there still counts toward "Named Most Often". Extraction
+otherwise runs at drafting time and would never see it. The call is skipped when
+the summary comes through unedited.
+
 The open text is passed to the model under its own key rather than alongside the
 other answers, because the instruction not to summarise it was ignored when it
 sat in the same list: the model folded it into the summary and the entry said

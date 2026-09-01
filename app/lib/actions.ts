@@ -6,6 +6,7 @@ import type { ScriptStep } from "./checkin";
 import {
   composeFallbackDraft,
   draftDay,
+  extractMentions,
   pickNextQuestion,
   type CheckinAnswers,
   type DayDraft,
@@ -51,6 +52,19 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
 
   if (!user) return { ok: false, error: "You need to be signed in." };
 
+  // Anything typed into the summary box after drafting was never seen by the
+  // extraction pass. Re-read the kept text when it differs, so a name added at
+  // the last step still counts. Unedited summaries skip the call.
+  let people = input.people;
+  let tags = input.tags;
+  if (input.summary.trim() && input.summary.trim() !== input.summaryDraft.trim()) {
+    const found = await extractMentions(input.summary);
+    if (found) {
+      people = [...new Set([...people, ...found.people])];
+      tags = [...new Set([...tags, ...found.tags])].slice(0, 4);
+    }
+  }
+
   const { data, error } = await supabase
     .from("entries")
     .upsert(
@@ -62,8 +76,8 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
         summary: input.summary,
         summary_draft: input.summaryDraft,
         gratitude: input.gratitude,
-        tags: input.tags,
-        people: input.people,
+        tags,
+        people,
         voice_duration_seconds: input.voiceDurationSeconds,
       },
       { onConflict: "user_id,entry_date" },

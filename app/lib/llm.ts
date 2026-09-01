@@ -378,3 +378,68 @@ export async function pickNextQuestion(
     return null;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+ * Re-reading the final text
+ * ------------------------------------------------------------------------- */
+
+const MentionsSchema = z.object({
+  /** First names of people mentioned, exactly as written. */
+  people: z.array(z.string()),
+  /** Up to four short labels for what the day was about. */
+  tags: z.array(z.string()),
+});
+
+const MENTIONS_SYSTEM = `You read one finished journal entry and list what it mentions.
+
+- people: the first names of people the writer mentions, exactly as they spelled them. Only actual people. Not the writer, not pets, not places, not companies. Return an empty array if nobody is named.
+- tags: at most four short labels, one or two words each, for what the day was about. Drawn from the text, never invented.
+
+Return nothing else. Do not summarise, interpret or comment.`;
+
+/**
+ * Read people and tags out of the summary the user actually kept.
+ *
+ * Drafting extracts these from the check-in answers, which misses anything added
+ * while editing the summary afterwards: an entry ending "I met up with Andy and
+ * Amy", typed at the last step, recorded no people at all. The kept summary is
+ * the text of record, so it is worth a second look.
+ */
+export async function extractMentions(
+  summary: string,
+): Promise<{ people: string[]; tags: string[] } | null> {
+  if (!llmConfigured()) return null;
+  const text = summary.trim();
+  if (!text) return null;
+
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.parse(
+      {
+        model: MODEL,
+        max_tokens: 1024,
+        output_config: { format: zodOutputFormat(MentionsSchema) },
+        system: MENTIONS_SYSTEM,
+        messages: [{ role: "user", content: text }],
+      },
+      { timeout: 6000 },
+    );
+
+    if (response.stop_reason === "refusal") return null;
+    const parsed = response.parsed_output;
+    if (!parsed) return null;
+
+    return {
+      people: parsed.people.map((p) => p.trim()).filter(Boolean),
+      tags: parsed.tags.map((t) => t.trim()).filter(Boolean).slice(0, 4),
+    };
+  } catch (error) {
+    if (error instanceof Anthropic.APIError) {
+      console.error(`[llm] extractMentions ${error.status}: ${error.message}`);
+    } else {
+      console.error("[llm] extractMentions failed:", error);
+    }
+    return null;
+  }
+}
