@@ -1,0 +1,94 @@
+/* ============================================================
+   Keepsake design tokens
+   ------------------------------------------------------------
+   Resolved values. The prototype loaded the RAVL design system
+   stylesheet and then overrode the --ravl-* palette in an inline
+   <style> block; both sat in :root at equal specificity, so the
+   override won. Everything below is already resolved through
+   both hops, so the RAVL stylesheet is not shipped.
+   ============================================================ */
+
+:root {
+  /* ---------- Text ---------- */
+  --fg-1: #14213d; /* headings, body */
+  --fg-2: #33303a; /* secondary */
+  --fg-3: #6b7a90; /* captions, muted */
+  --fg-4: #9a8e88; /* hints, disabled */
+  --fg-inverse: #ffffff;
+
+  /* Small brand text. The prototype used #FF5F7E here, which is 2.92:1 on
+     white and fails AA outright. #A62E4E is 6.72:1 and is already the
+     palette's darker text-on-tint value. */
+  --fg-brand: #a62e4e;
+
+  /* ---------- Surfaces ---------- */
+  --bg-1: #ffffff; /* cards, docks, input fills */
+  --bg-2: #f3ede3; /* check-in message list */
+  --bg-3: #f3ede3; /* tinted panel */
+  --bg-inverse: #14213d;
+  --shell: #fbf8f3; /* the 452px column */
+  --page: #e4dcd0; /* behind the column */
+
+  /* ---------- Borders ---------- */
+  --border-1: #e4dcd0;
+  --border-2: #cfc4b4;
+  --border-strong: #33303a;
+  --border-brand: #d93b63;
+
+  /* ---------- Brand ---------- */
+  --bg-brand: linear-gradient(135deg, #d93b63 0%, #a62e4e 100%);
+  --brand-solid: #d93b63; /* gradient stops, non-text accents, display text */
+  --brand-text: #a62e4e; /* any brand text below 18px / 14px bold */
+
+  /* ---------- Colour blocks (the Headspace-style pass) ---------- */
+  --block-rose: #b32950; /* home hero */
+  --block-mango: #f0902b; /* streak tile, calendar "kept" cell */
+  --block-teal: #146a6a; /* days-kept tile, gratitude card */
+  --block-indigo: #2b3a8c; /* weekly note */
+  --accent-teal: #9fd9dc; /* on dark surfaces, photo placeholder fill */
+  --accent-teal-soft: #bde7e7; /* eyebrow + attribution on --block-teal */
+  --accent-peach: #ffd9c2; /* eyebrow + subcopy on --block-rose */
+
+  /* ---------- Tints ---------- */
+  --tint-50: #fff2ee;
+  --tint-100: #ffe0d8;
+  --tint-200: #ffc3b4;
+  --tint-300: #ff9e93;
+  --bubble-bot: #e7dfd2; /* assistant chat bubble */
+  --cal-empty: #ede6da; /* unkept calendar cell */
+
+  /* ---------- Mood scale (Insights bars) ---------- */
+  --mood-high: #1f8a8a; /* 4-5 */
+  --mood-mid: #f0902b; /* 3 */
+  --mood-low: #e8456b; /* 1-2 */
+
+  /* ---------- Shadows ---------- */
+  --shadow-sm: 0 2px 6px rgba(14, 11, 20, 0.07);
+  --shadow-md: 0 8px 24px rgba(14, 11, 20, 0.08);
+  --shadow-lg: 0 20px 48px rgba(14, 11, 20, 0.12);
+  --shadow-brand: 0 12px 32px rgba(255, 95, 126, 0.28);
+
+  /* ---------- Type ----------
+     --font-sans-loaded comes from next/font and already carries its own metric
+     fallback chain, so the fallback here is only for when the variable is absent. */
+  --font-sans: var(--font-sans-loaded, "Helvetica Neue", Arial, sans-serif);
+
+  /* ---------- Motion ---------- */
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* ---------- Layout ---------- */
+  --shell-width: 452px;
+}
+
+/* Entry-list thumbnail tints, cycled by index. */
+:root {
+  --tint-cycle-0: #1f8a8a;
+  --tint-cycle-1: #e8456b;
+  --tint-cycle-2: #2b3a8c;
+  --tint-cycle-3: #f0902b;
+  --tint-cycle-4: #14213d;
+}

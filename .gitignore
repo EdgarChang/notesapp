@@ -1,31 +1,42 @@
-# Logs
+# dependencies
+node_modules
+.pnp
+.pnp.*
+
+# next
+.next
+out
+next-env.d.ts
+
+# production
+build
+dist
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# debug logs
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# env
+.env
+.env*.local
 
-# Editor directories and files
+# editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 
+# vercel
+.vercel
 
-# amplify
-node_modules
-.amplify
-amplify_outputs*
-amplifyconfiguration*
+# design reference and build plan: held outside the repo, it carries internal
+# brand material and this repo is public
+docs/

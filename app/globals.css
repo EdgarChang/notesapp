@@ -1,0 +1,138 @@
+@import "./tokens.css";
+
+/* ============================================================
+   Base + semantic type roles
+   Carried over from the RAVL design system stylesheet, trimmed to
+   what Keepsake actually uses and re-tuned to the prototype's
+   mobile type scale.
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+  margin: 0;
+}
+
+p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+/* Eyebrow: small, wide-tracked label. Brand colour, contrast-corrected. */
+.eyebrow {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-brand);
+}
+
+/* Keep focus rings visible, per the handoff's a11y note. */
+:focus-visible {
+  outline: 2px solid var(--brand-solid);
+  outline-offset: 2px;
+}
+
+/* ---------- Animations used across screens ----------
+
+   These are applied via the global utility classes below, not by referencing
+   the keyframe names from a CSS Module. CSS Modules rewrites animation names in
+   `animation`/`animation-name` to its local scope, so a module that says
+   `animation: ks-in ...` compiles to a name that matches no keyframes and
+   silently does nothing. Keeping the keyframes and their utility classes
+   together here means one definition and a reference that actually resolves. */
+
+/* Message and card entry */
+@keyframes ks-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Live recording waveform */
+@keyframes ks-bar {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Assistant typing indicator */
+@keyframes ks-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* Utility classes, safe to use from components styled with CSS Modules. */
+
+.ks-animate-in {
+  animation: ks-in var(--dur-slow) var(--ease-emph) both;
+}
+
+.ks-animate-bar {
+  transform-origin: center;
+  animation: ks-bar 900ms ease-in-out infinite;
+}
+
+.ks-animate-dot {
+  animation: ks-dot 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
