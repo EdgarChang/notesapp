@@ -150,6 +150,8 @@ What is not real yet:
   works, but flatly: questions come from the written script, replies are the
   written one-liners, and the summary is composed from the user's own answers.
 - **No learning loop.** See "How the check-in adapts" above.
+  `question_profiles.recurring_people` is also unused now: "Named Most Often"
+  counts `entries.people` instead, so revising or deleting a day corrects it.
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.

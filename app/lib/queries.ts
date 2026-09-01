@@ -267,21 +267,36 @@ export async function getMoodSeries(
   return { series, axis: [shortMonthDay(startIso), shortMonthDay(today)] };
 }
 
-/** Names mentioned most often, from question_profiles.recurring_people. */
+/**
+ * Names mentioned most often, counted across entries.
+ *
+ * Derived rather than accumulated. A stored tally could not survive a day being
+ * revised or an entry being deleted, and had already drifted to a count of
+ * three from a single entry.
+ */
 export async function getTopPeople(
   limit = 4,
 ): Promise<{ name: string; count: number }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("question_profiles")
-    .select("recurring_people")
-    .maybeSingle();
+    .from("entries")
+    .select("people")
+    .not("people", "eq", "{}");
   failed("getTopPeople", error);
 
-  const people = (data?.recurring_people ?? {}) as Record<string, number>;
-  return Object.entries(people)
-    .map(([name, count]) => ({ name, count: Number(count) }))
-    .sort((a, b) => b.count - a.count)
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    // One mention per entry per person: naming someone twice in a day is still
+    // one day you thought about them.
+    for (const name of new Set((row.people ?? []) as string[])) {
+      const key = name.trim();
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
 
@@ -319,27 +334,20 @@ export async function getPickerContext(): Promise<{
 }> {
   const supabase = await createClient();
 
-  const [{ data: profile }, { data: recent }] = await Promise.all([
-    supabase
-      .from("question_profiles")
-      .select("focus_topics, recurring_people")
-      .maybeSingle(),
+  const [{ data: profile }, { data: recent }, people] = await Promise.all([
+    supabase.from("question_profiles").select("focus_topics").maybeSingle(),
     supabase
       .from("entries")
       .select("title")
       .not("title", "is", null)
       .order("entry_date", { ascending: false })
       .limit(5),
+    getTopPeople(5),
   ]);
-
-  const people = (profile?.recurring_people ?? {}) as Record<string, number>;
 
   return {
     focusTopics: (profile?.focus_topics ?? []) as string[],
     recentTitles: (recent ?? []).map((r) => r.title as string),
-    recurringPeople: Object.entries(people)
-      .sort((a, b) => Number(b[1]) - Number(a[1]))
-      .slice(0, 5)
-      .map(([name]) => name),
+    recurringPeople: people.map((p) => p.name),
   };
 }

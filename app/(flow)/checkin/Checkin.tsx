@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { draftToday, nextQuestion, recordPeople, saveCheckin } from "@/app/lib/actions";
+import { draftToday, nextQuestion, saveCheckin } from "@/app/lib/actions";
 import {
   buildScript,
   CANNED_PHOTO_CAPTION,
@@ -315,6 +315,7 @@ export function Checkin({
       summaryDraft: draft?.summary ?? "",
       gratitude: answers.gratitude,
       tags: tags.slice(0, 4),
+      people: draft?.people ?? [],
       voiceDurationSeconds: null,
     });
 
@@ -323,8 +324,6 @@ export function Checkin({
       setSaving(false);
       return;
     }
-
-    if (draft?.people.length) await recordPeople(draft.people);
 
     router.refresh();
     router.push(`/entry/${result.id}`);

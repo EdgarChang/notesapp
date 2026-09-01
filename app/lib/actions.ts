@@ -22,6 +22,8 @@ export type CheckinInput = {
   summaryDraft: string;
   gratitude: string | null;
   tags: string[];
+  /** Names mentioned, stored on the entry so counts can be derived from it. */
+  people: string[];
   voiceDurationSeconds: number | null;
 };
 
@@ -61,6 +63,7 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
         summary_draft: input.summaryDraft,
         gratitude: input.gratitude,
         tags: input.tags,
+        people: input.people,
         voice_duration_seconds: input.voiceDurationSeconds,
       },
       { onConflict: "user_id,entry_date" },
@@ -108,39 +111,6 @@ export async function draftToday(
 
   return { draft: base, usedModel: drafted !== null, verbatim: false };
 }
-
-/**
- * Record the names Claude found, so Insights' "Named Most Often" has something
- * to count. Merged rather than replaced, since counts accumulate across days.
- */
-export async function recordPeople(names: string[]): Promise<void> {
-  if (names.length === 0) return;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { data } = await supabase
-    .from("question_profiles")
-    .select("recurring_people")
-    .maybeSingle();
-
-  const counts = { ...((data?.recurring_people ?? {}) as Record<string, number>) };
-  for (const name of names) {
-    const key = name.trim();
-    if (key) counts[key] = (counts[key] ?? 0) + 1;
-  }
-
-  const { error } = await supabase
-    .from("question_profiles")
-    .update({ recurring_people: counts })
-    .eq("user_id", user.id);
-
-  if (error) console.error("[actions] recordPeople:", error.message);
-}
-
 
 /**
  * Reply to what they just said, and reword the next step for this person.
