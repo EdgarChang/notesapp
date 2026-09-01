@@ -1,0 +1,185 @@
+.root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 28px 28px;
+  /* Onboarding sits on white, not the shell's warm paper. */
+  background: var(--bg-1);
+}
+
+/* ---------- Progress ---------- */
+
+.progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 48px;
+  flex: none;
+}
+
+.segment {
+  height: 3px;
+  flex: 1;
+  border-radius: 3px;
+  background: var(--border-1);
+  transition: background var(--dur-base) var(--ease-standard);
+}
+
+.segmentDone {
+  background: var(--brand-solid);
+}
+
+/* ---------- Step body ---------- */
+
+.step {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.display {
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+}
+
+.lede {
+  font-size: 16px;
+  color: var(--fg-3);
+  margin: 0 0 40px;
+  max-width: 32ch;
+}
+
+.stepTitle {
+  font-size: 28px;
+  margin: 0 0 10px;
+}
+
+.stepLede {
+  font-size: 15px;
+  color: var(--fg-3);
+  margin: 0 0 28px;
+}
+
+/* ---------- Step 1: name ---------- */
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.input {
+  margin-top: 10px;
+  padding: 14px 16px;
+  font-size: 17px;
+  color: var(--fg-1);
+  border: 1.5px solid var(--border-2);
+  border-radius: 4px;
+  background: var(--bg-1);
+}
+
+/* ---------- Step 2: focus topics ---------- */
+
+.topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.topic {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 18px;
+  min-height: 44px;
+  border-radius: 3px;
+  border: 1.5px solid var(--border-1);
+  background: var(--bg-1);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+
+.topic:hover {
+  border-color: var(--border-brand);
+}
+
+/* Brand gradient rather than a flat fill: white on the gradient is the one
+   brand-fill-with-white-text combination the build plan clears at this size. */
+.topicOn {
+  background: var(--bg-brand);
+  border-color: transparent;
+  color: var(--fg-inverse);
+}
+
+/* ---------- Step 3: reminder time ---------- */
+
+.times {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.time {
+  text-align: left;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 16px 18px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid var(--border-1);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-standard);
+}
+
+.time:hover {
+  border-color: var(--border-2);
+}
+
+.timeOn {
+  background: var(--tint-50);
+  border-color: var(--brand-solid);
+}
+
+.timeHint {
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+/* ---------- CTA ---------- */
+
+.cta {
+  flex: none;
+  margin-top: 24px;
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg-inverse);
+  background: var(--bg-brand);
+  border: none;
+  border-radius: 3px;
+  box-shadow: var(--shadow-brand);
+  cursor: pointer;
+  transition: filter var(--dur-base) var(--ease-standard);
+}
+
+/* The prototype hovered to a flat #E8456B, which drops white text to ~3.9:1.
+   A brightness lift gives the same feedback without losing contrast. */
+.cta:hover {
+  filter: brightness(1.06);
+}
+
+.cta:active {
+  transform: scale(0.98);
+}
