@@ -101,18 +101,23 @@ writes a row, and every screen reads from the database.
 
 What is not real yet:
 
-- **Voice is simulated.** The recording button animates and posts a canned
-  transcript. Real capture needs `MediaRecorder` plus a transcription provider,
-  which is still an open decision.
+- **No voice capture.** The gratitude step takes typed text. The simulated
+  recorder is gone, so `voice_key`, `voice_transcript` and
+  `voice_duration_seconds` stay null and entry detail never shows a player for a
+  file that does not exist. Real capture needs `MediaRecorder`, a private
+  Storage bucket, and a transcription provider, which is still an open decision.
 - **Photos do nothing.** The check-in offers a photo step but stores no file, so
   `photo_key` stays null and entry detail never shows one. Media upload is step 8.
-- **No LLM.** The six questions are a hardcoded script and the summary draft is a
-  constant. Step 7 replaces both with Claude calls.
+- **The question script is still hardcoded.** Claude drafts the summary, but does
+  not yet pick the questions. `app/lib/checkin.ts` holds the six steps, shaped to
+  the picker's output schema so it can be swapped without UI changes.
+  `ANTHROPIC_API_KEY` must be set for drafting; without it every check-in falls
+  back to a draft composed from the user's own answers.
 - **No weekly note.** `weekly_notes` is never written, so the Insights statement
   card stays hidden and the chart, people and quotes are composed from entries
   directly. The scheduled job is step 8.
-- **"Named Most Often" is always empty.** It reads
-  `question_profiles.recurring_people`, which only the LLM pass populates.
+- **Photos store no file.** The photo step posts a placeholder bubble with a
+  fabricated filename and writes nothing, so `photo_key` stays null.
 - **Email confirmation is off** for development, so anyone can register with an
   address they do not own. Turn it back on, with custom SMTP, before real users.
 - **Timezone.** "Today" uses the server's date. A journal day is a calendar day

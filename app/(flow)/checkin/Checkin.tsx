@@ -3,25 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { draftToday, recordPeople, saveCheckin } from "@/app/lib/actions";
 import {
   buildScript,
   CANNED_PHOTO_CAPTION,
-  CANNED_VOICE,
-  DRAFT_SUMMARY,
-  LIVE_BAR_COUNT,
-  LIVE_BAR_STAGGER_MS,
-  STATIC_BARS,
   TIMING,
   type AssistantTone,
 } from "@/app/lib/checkin";
-import { saveCheckin } from "@/app/lib/actions";
-import { formatDuration, MOOD_LABELS, type Mood } from "@/app/lib/entries";
+import { MOOD_LABELS, type Mood } from "@/app/lib/entries";
 import styles from "./checkin.module.css";
 
 type Message =
   | { id: number; from: "bot"; kind: "text"; text: string; adaptiveNote?: string }
   | { id: number; from: "user"; kind: "text"; text: string }
-  | { id: number; from: "user"; kind: "voice"; transcript: string; durationSeconds: number }
   | { id: number; from: "user"; kind: "photo"; caption: string };
 
 /** Plain Omit collapses a union to its shared keys, so distribute over it. */
@@ -31,6 +25,21 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
 
 /** A message before the list assigns it an id. */
 type NewMessage = DistributiveOmit<Message, "id">;
+
+type Answers = {
+  mood: Mood | null;
+  highlight: string | null;
+  outside: boolean | null;
+  gratitude: string | null;
+};
+
+type Draft = {
+  title: string;
+  tags: string[];
+  people: string[];
+  /** False when the plainly composed fallback was used. */
+  usedModel: boolean;
+};
 
 export function Checkin({
   tone,
@@ -45,24 +54,27 @@ export function Checkin({
   const [step, setStep] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [recording, setRecording] = useState(false);
-  const [summary, setSummary] = useState(DRAFT_SUMMARY);
+  /** The text input buffer for a text step. */
+  const [inputText, setInputText] = useState("");
+  /** The editable summary shown on the last step. */
+  const [summary, setSummary] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // What the six steps actually collected, for the row we write at the end.
-  const [answers, setAnswers] = useState<{
-    mood: Mood | null;
-    title: string | null;
-    gratitude: string | null;
-    voiceDurationSeconds: number | null;
-    tags: string[];
-  }>({ mood: null, title: null, gratitude: null, voiceDurationSeconds: null, tags: [] });
+  const [answers, setAnswers] = useState<Answers>({
+    mood: null,
+    highlight: null,
+    outside: null,
+    gratitude: null,
+  });
 
   const chatRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /** Guards against drafting twice if the last step is re-entered. */
+  const draftRequested = useRef(false);
 
   /** setTimeout that is cancelled if the screen unmounts mid-sequence. */
   const later = useCallback((fn: () => void, ms: number) => {
@@ -102,23 +114,18 @@ export function Checkin({
     [script, showAdaptiveNotes, push, later],
   );
 
-  // Open with the first question once the screen has painted. askAt is stable
-  // for a given script and tone, so this fires once per check-in.
+  // Open with the first question once the screen has painted.
   useEffect(() => {
     const t = setTimeout(() => askAt(0), TIMING.open);
     return () => clearTimeout(t);
   }, [askAt]);
 
-  /**
-   * Post the user's answer, acknowledge it, then ask the next question.
-   * `answer` is null when the step was skipped, which also skips the ack.
-   */
   const advance = useCallback(
     (answer: NewMessage | null, ack: string) => {
       if (answer) push(answer);
       const next = step + 1;
       setStep(next);
-      setDraft("");
+      setInputText("");
       if (ack) {
         later(() => push({ from: "bot", kind: "text", text: ack }), TIMING.ack);
       }
@@ -129,51 +136,59 @@ export function Checkin({
 
   const current = script[step];
 
+  /**
+   * Fetch the draft as soon as the summary step is reached, so the textarea is
+   * usually filled by the time the question finishes typing out.
+   */
+  useEffect(() => {
+    if (current?.field !== "summary" || draftRequested.current) return;
+    draftRequested.current = true;
+    setDrafting(true);
+
+    draftToday(answers)
+      .then(({ draft: d, usedModel }) => {
+        setSummary(d.summary);
+        setDraft({ title: d.title, tags: d.tags, people: d.people, usedModel });
+      })
+      .catch((error) => {
+        console.error("[checkin] draftToday failed:", error);
+        setSummary("");
+        setDraft(null);
+      })
+      .finally(() => setDrafting(false));
+  }, [current?.field, answers]);
+
   const answerText = (text: string) => {
     if (!current) return;
 
-    if (current.kind === "chips") {
-      const mood = (Object.keys(MOOD_LABELS) as unknown as Mood[]).find(
-        (m) => MOOD_LABELS[m] === text,
-      );
-      setAnswers((a) => ({ ...a, mood: mood ?? null }));
-    } else if (current.kind === "text") {
-      setAnswers((a) => ({ ...a, title: text }));
-    } else if (current.kind === "yesno" && text === "Yep") {
-      // The daylight question is the only yes/no in the script, and a yes is
-      // worth keeping as a tag.
-      setAnswers((a) => ({ ...a, tags: [...new Set([...a.tags, "Outside"])] }));
+    switch (current.field) {
+      case "mood": {
+        const mood = (Object.keys(MOOD_LABELS) as unknown as Mood[]).find(
+          (m) => MOOD_LABELS[m] === text,
+        );
+        setAnswers((a) => ({ ...a, mood: mood ?? null }));
+        break;
+      }
+      case "highlight":
+        setAnswers((a) => ({ ...a, highlight: text }));
+        break;
+      case "outside":
+        setAnswers((a) => ({ ...a, outside: text === "Yep" }));
+        break;
+      case "gratitude":
+        setAnswers((a) => ({ ...a, gratitude: text }));
+        break;
+      default:
+        break;
     }
 
     advance({ from: "user", kind: "text", text }, current.ack);
   };
 
-  const sendDraft = () => {
-    const text = draft.trim();
+  const sendInput = () => {
+    const text = inputText.trim();
     if (!text || !current) return;
     answerText(text);
-  };
-
-  const toggleRecording = () => {
-    if (!recording) {
-      setRecording(true);
-      return;
-    }
-    setRecording(false);
-    setAnswers((a) => ({
-      ...a,
-      gratitude: CANNED_VOICE.transcript,
-      voiceDurationSeconds: CANNED_VOICE.durationSeconds,
-    }));
-    advance(
-      {
-        from: "user",
-        kind: "voice",
-        transcript: CANNED_VOICE.transcript,
-        durationSeconds: CANNED_VOICE.durationSeconds,
-      },
-      current?.ack ?? "",
-    );
   };
 
   const addPhoto = () => {
@@ -185,8 +200,35 @@ export function Checkin({
 
   const skip = () => advance(null, "");
 
-  // Keep the newest message in view, matching the prototype's
-  // `el.scrollTop = el.scrollHeight` on every update.
+  const keepDay = async () => {
+    if (saving || drafting) return;
+    setSaving(true);
+    setSaveError(null);
+
+    const tags = [...new Set([...(draft?.tags ?? []), ...(answers.outside ? ["Outside"] : [])])];
+
+    const result = await saveCheckin({
+      mood: answers.mood,
+      title: draft?.title ?? answers.highlight,
+      summary,
+      summaryDraft: draft ? summary : "",
+      gratitude: answers.gratitude,
+      tags: tags.slice(0, 4),
+      voiceDurationSeconds: null,
+    });
+
+    if (!result.ok) {
+      setSaveError(result.error);
+      setSaving(false);
+      return;
+    }
+
+    if (draft?.people.length) await recordPeople(draft.people);
+
+    router.refresh();
+    router.push(`/entry/${result.id}`);
+  };
+
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -236,29 +278,6 @@ export function Checkin({
               </div>
             ) : null}
 
-            {message.kind === "voice" ? (
-              <div className={`${styles.bubble} ${styles.bubbleUser}`}>
-                <div className={styles.voiceHead}>
-                  <div className={styles.play} aria-hidden="true">
-                    &#9654;
-                  </div>
-                  <div className={styles.staticBars} aria-hidden="true">
-                    {STATIC_BARS.map((height, i) => (
-                      <div
-                        key={i}
-                        className={styles.staticBar}
-                        style={{ height: `${height}px` }}
-                      />
-                    ))}
-                  </div>
-                  <div className={styles.voiceDuration}>
-                    {formatDuration(message.durationSeconds)}
-                  </div>
-                </div>
-                <div className={styles.voiceTranscript}>{message.transcript}</div>
-              </div>
-            ) : null}
-
             {message.kind === "photo" ? (
               <div className={styles.photoCard}>
                 <div className={styles.photoArea}>
@@ -297,39 +316,46 @@ export function Checkin({
 
         {current?.kind === "text" ? (
           <div>
-            <div className={styles.suggestions}>
-              {current.chips?.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={styles.suggestion}
-                  onClick={() => answerText(label)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {current.chips?.length ? (
+              <div className={styles.suggestions}>
+                {current.chips.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={styles.suggestion}
+                    onClick={() => answerText(label)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className={styles.textRow}>
               <input
                 className={styles.input}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") sendDraft();
+                  if (e.key === "Enter") sendInput();
                 }}
-                placeholder="Type it in a line or two"
+                placeholder={current.placeholder ?? "Type your answer"}
                 aria-label={current.question}
               />
               <button
                 type="button"
                 className={styles.send}
-                onClick={sendDraft}
-                disabled={!draft.trim()}
+                onClick={sendInput}
+                disabled={!inputText.trim()}
                 aria-label="Send"
               >
                 &rarr;
               </button>
             </div>
+            {current.field === "gratitude" ? (
+              <button type="button" className={styles.skip} onClick={skip}>
+                Skip this one
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -348,32 +374,6 @@ export function Checkin({
               onClick={() => answerText("Yep")}
             >
               Yep
-            </button>
-          </div>
-        ) : null}
-
-        {current?.kind === "voice" ? (
-          <div className={styles.voiceDock}>
-            {recording ? (
-              <div className={styles.liveBars} aria-hidden="true">
-                {Array.from({ length: LIVE_BAR_COUNT }, (_, i) => (
-                  <div
-                    key={i}
-                    className={`${styles.liveBar} ks-animate-bar`}
-                    style={{ animationDelay: `${i * LIVE_BAR_STAGGER_MS}ms` }}
-                  />
-                ))}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              className={`${styles.record} ${recording ? styles.recording : ""}`}
-              onClick={toggleRecording}
-            >
-              {recording ? "Stop and send" : "Hold to talk"}
-            </button>
-            <button type="button" className={styles.skip} onClick={skip}>
-              Skip this one
             </button>
           </div>
         ) : null}
@@ -401,8 +401,17 @@ export function Checkin({
               rows={4}
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
+              placeholder={drafting ? "" : "Write the day in a line or two"}
+              disabled={drafting}
               aria-label="Your day in three lines"
             />
+            {drafting ? (
+              <div className={styles.draftNote}>Writing your day&hellip;</div>
+            ) : draft && !draft.usedModel ? (
+              <div className={styles.draftNote}>
+                Put together from your answers. Edit it into your own words.
+              </div>
+            ) : null}
             {saveError ? (
               <div className={styles.saveError} role="alert">
                 {saveError}
@@ -411,28 +420,8 @@ export function Checkin({
             <button
               type="button"
               className={styles.keep}
-              disabled={saving}
-              onClick={async () => {
-                if (saving) return;
-                setSaving(true);
-                setSaveError(null);
-                const result = await saveCheckin({
-                  mood: answers.mood,
-                  title: answers.title,
-                  summary,
-                  summaryDraft: DRAFT_SUMMARY,
-                  gratitude: answers.gratitude,
-                  tags: answers.tags,
-                  voiceDurationSeconds: answers.voiceDurationSeconds,
-                });
-                if (!result.ok) {
-                  setSaveError(result.error);
-                  setSaving(false);
-                  return;
-                }
-                router.refresh();
-                router.push(`/entry/${result.id}`);
-              }}
+              disabled={saving || drafting}
+              onClick={keepDay}
             >
               {saving ? "Keeping…" : "Keep this day"}
             </button>

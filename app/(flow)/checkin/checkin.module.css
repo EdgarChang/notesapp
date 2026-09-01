@@ -135,52 +135,6 @@
   animation-delay: 0.4s;
 }
 
-/* ---------- Voice bubble ---------- */
-
-.voiceHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.play {
-  width: 28px;
-  height: 28px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  flex: none;
-}
-
-.staticBars {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 22px;
-}
-
-.staticBar {
-  width: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.voiceDuration {
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.voiceTranscript {
-  font-size: 15px;
-  line-height: 1.45;
-  margin-top: 10px;
-  opacity: 0.95;
-}
-
 /* ---------- Photo bubble ---------- */
 
 .photoCard {
@@ -355,54 +309,6 @@
   transform: scale(0.98);
 }
 
-/* voice */
-
-.voiceDock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-
-.liveBars {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 34px;
-}
-
-/* Waveform comes from the global .ks-animate-bar class; the per-bar stagger is
-   set inline. */
-.liveBar {
-  width: 4px;
-  height: 30px;
-  border-radius: 2px;
-  background: var(--tint-300);
-}
-
-.record {
-  width: 100%;
-  min-height: 56px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 3px;
-  border: none;
-  background: var(--bg-brand);
-  color: var(--fg-inverse);
-  cursor: pointer;
-  transition: all var(--dur-base) var(--ease-standard);
-}
-
-.recording {
-  background: var(--tint-50);
-  /* #E8456B here is 3.4:1 at 16px semibold, under AA. */
-  color: var(--brand-text);
-}
-
-.record:active {
-  transform: scale(0.98);
-}
-
 /* photo */
 
 .photoDock {
@@ -511,4 +417,10 @@
   opacity: 0.65;
   cursor: default;
   box-shadow: none;
+}
+
+.draftNote {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-3);
 }

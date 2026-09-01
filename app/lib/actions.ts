@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { todayIso } from "./entries";
+import {
+  composeFallbackDraft,
+  draftDay,
+  type CheckinAnswers,
+  type DayDraft,
+} from "./llm";
 import { createClient } from "./supabase/server";
 
 export type CheckinInput = {
@@ -66,4 +72,52 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
   revalidatePath("/insights");
 
   return { ok: true, id: data.id };
+}
+
+
+/**
+ * Draft the day from the answers collected so far.
+ *
+ * Always resolves. `usedModel` tells the UI whether Claude wrote it or whether
+ * this is the plainly composed version, so the copy can be honest about which
+ * one the user is editing.
+ */
+export async function draftToday(
+  answers: CheckinAnswers,
+): Promise<{ draft: DayDraft; usedModel: boolean }> {
+  const drafted = await draftDay(answers);
+  if (drafted) return { draft: drafted, usedModel: true };
+  return { draft: composeFallbackDraft(answers), usedModel: false };
+}
+
+/**
+ * Record the names Claude found, so Insights' "Named Most Often" has something
+ * to count. Merged rather than replaced, since counts accumulate across days.
+ */
+export async function recordPeople(names: string[]): Promise<void> {
+  if (names.length === 0) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data } = await supabase
+    .from("question_profiles")
+    .select("recurring_people")
+    .maybeSingle();
+
+  const counts = { ...((data?.recurring_people ?? {}) as Record<string, number>) };
+  for (const name of names) {
+    const key = name.trim();
+    if (key) counts[key] = (counts[key] ?? 0) + 1;
+  }
+
+  const { error } = await supabase
+    .from("question_profiles")
+    .update({ recurring_people: counts })
+    .eq("user_id", user.id);
+
+  if (error) console.error("[actions] recordPeople:", error.message);
 }
