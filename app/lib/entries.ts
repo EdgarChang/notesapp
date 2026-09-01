@@ -224,6 +224,33 @@ export function shortDate(isoDate: string): string {
   return `${weekday}, ${month} ${d}`;
 }
 
+/** Days in the month an ISO date falls in. */
+export function daysInMonth(isoDate: string): number {
+  const { y, m } = parts(isoDate);
+  if (m === 2) {
+    const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    return leap ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(m) ? 30 : 31;
+}
+
+/** "August 2026" */
+export function monthAndYear(isoDate: string): string {
+  const { y, m } = parts(isoDate);
+  return `${MONTHS[m - 1] ?? ""} ${y}`;
+}
+
+/** "Aug 30" */
+export function shortMonthDay(isoDate: string): string {
+  const { m, d } = parts(isoDate);
+  return `${(MONTHS[m - 1] ?? "").slice(0, 3)} ${d}`;
+}
+
+/** Day-of-month as a number, for calendar cells. */
+export function dayOfMonth(isoDate: string): number {
+  return parts(isoDate).d;
+}
+
 /** 19 -> "0:19" */
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);

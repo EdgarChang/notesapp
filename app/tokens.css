@@ -57,6 +57,7 @@
   --tint-300: #ff9e93;
   --bubble-bot: #e7dfd2; /* assistant chat bubble */
   --cal-empty: #ede6da; /* unkept calendar cell */
+  --wave-soft: #ffc48a; /* static waveform bars on a light surface */
 
   /* ---------- Mood scale (Insights bars) ---------- */
   --mood-high: #1f8a8a; /* 4-5 */

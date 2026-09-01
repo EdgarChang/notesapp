@@ -1,0 +1,158 @@
+.backRow {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back {
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: var(--fg-3);
+  padding: 8px;
+  margin-left: -8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.body {
+  padding: 0 24px 32px;
+}
+
+.date {
+  font-size: 30px;
+  margin: 0 0 18px;
+}
+
+/* ---------- Mood + tag pills ---------- */
+
+.pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.moodPill,
+.tagPill {
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 3px;
+}
+
+.moodPill {
+  font-weight: 600;
+  background: var(--bg-brand);
+  color: var(--fg-inverse);
+}
+
+.tagPill {
+  font-weight: 500;
+  background: var(--bg-3);
+  /* The prototype used #E8456B here, 3.28:1 on this fill and under AA at 13px. */
+  color: var(--brand-text);
+}
+
+/* ---------- Photo ---------- */
+
+.photo {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+
+.photoArea {
+  height: 230px;
+  background: var(--accent-teal);
+  display: flex;
+  align-items: flex-end;
+  padding: 14px;
+}
+
+.photoTag {
+  font-size: 11px;
+  color: var(--ink-deep);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+
+/* ---------- Summary ---------- */
+
+.summary {
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  margin: 0 0 24px;
+}
+
+/* ---------- Voice note ---------- */
+
+.voice {
+  padding: 16px;
+  border: 1px solid var(--border-1);
+  border-radius: 6px;
+  margin-bottom: 24px;
+}
+
+.voiceHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.play {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--bg-brand);
+  color: var(--fg-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  flex: 1;
+}
+
+/* Bars stretch to fill here, unlike the fixed 3px bars in a chat bubble. */
+.bar {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--wave-soft);
+}
+
+.voiceDuration {
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+.gratitude {
+  font-size: 14px;
+  color: var(--fg-3);
+  line-height: 1.55;
+}
+
+/* ---------- One year ago ---------- */
+
+.lastYear {
+  padding: 18px;
+  background: var(--tint-50);
+  border: 1.5px solid var(--tint-100);
+  border-radius: 6px;
+}
+
+.lastYearBody {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fg-2);
+}
