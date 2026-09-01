@@ -46,6 +46,7 @@
   --block-teal: #146a6a; /* days-kept tile, gratitude card */
   --block-indigo: #2b3a8c; /* weekly note */
   --accent-teal: #9fd9dc; /* on dark surfaces, photo placeholder fill */
+  --ink-deep: #1b2a46; /* label text on the photo placeholder fill */
   --accent-teal-soft: #bde7e7; /* eyebrow + attribution on --block-teal */
   --accent-peach: #ffd9c2; /* eyebrow + subcopy on --block-rose */
 

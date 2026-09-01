@@ -131,7 +131,30 @@ export const TONIGHT_QUESTION: Record<typeof PROFILE.assistantTone, string> = {
   Brief: "Ready when you are.",
 };
 
+/**
+ * Today's entry, as it looks the moment the check-in is kept. The prototype
+ * built this from component state; here it is seeded, because nothing persists
+ * until step 6 wires the database. That means edits made in the check-in
+ * summary box are lost on navigation, which is expected at this stage.
+ */
+export const TODAY_ENTRY: Entry = {
+  id: "today",
+  entryDate: PROFILE.today,
+  mood: 4,
+  title: "Shipped the release. Dinner with Maya.",
+  summary:
+    "Ran 6k before the sun was properly up. Shipped the release and nothing broke. Dinner with Maya \u2014 she\u2019s set on the trip in October.",
+  gratitude: "Priya staying on the call until it was actually fixed.",
+  tags: ["Work", "Maya", "Outside"],
+  hasPhoto: false,
+  voiceDurationSeconds: 14,
+  lastYear:
+    "Aug 31, 2025 \u2014 A Sunday. You wrote three words: \u201cslept, read, nothing.\u201d",
+  tintIndex: 3,
+};
+
 export function getEntry(id: string): Entry | undefined {
+  if (id === TODAY_ENTRY.id) return TODAY_ENTRY;
   return ENTRIES.find((e) => e.id === id);
 }
 
