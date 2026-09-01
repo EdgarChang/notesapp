@@ -49,6 +49,10 @@ export function Checkin({
   const [mood, setMood] = useState<number | null>(null);
   const [anchors, setAnchors] = useState<Record<string, string>>({});
   const [answers, setAnswers] = useState<PromptAnswer[]>([]);
+  /** Question and answer together, which is what the model needs. */
+  const [pairs, setPairs] = useState<
+    { question: string; answer: string; responseType: string }[]
+  >([]);
 
   const [activeStep, setActiveStep] = useState<Step | null>(null);
 
@@ -60,10 +64,14 @@ export function Checkin({
   const lastAnswerRef = useRef<string | null>(null);
   const answersRef = useRef(answers);
   const anchorsRef = useRef(anchors);
+  const pairsRef = useRef(pairs);
+  const moodRef = useRef<number | null>(null);
   useEffect(() => {
     answersRef.current = answers;
     anchorsRef.current = anchors;
-  }, [answers, anchors]);
+    pairsRef.current = pairs;
+    moodRef.current = mood;
+  }, [answers, anchors, pairs, mood]);
 
   const later = useCallback((fn: () => void, ms: number) => {
     timers.current.push(setTimeout(fn, ms));
@@ -84,13 +92,16 @@ export function Checkin({
   /** Everything answered so far, as context for the reply and the draft. */
   const contextAnswers = useCallback(
     () => ({
-      mood: null,
-      highlight:
-        answersRef.current.find((a) => a.value && a.responseType === "short_text")
-          ?.value ?? null,
-      outside: null,
-      gratitude: null,
-      open: null,
+      mood: moodRef.current,
+      worthwhile: anchorsRef.current["a003"]
+        ? Number(anchorsRef.current["a003"])
+        : null,
+      feeling: anchorsRef.current["a002"] ?? null,
+      people: (anchorsRef.current["a004"] ?? "")
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean),
+      responses: pairsRef.current,
     }),
     [],
   );
@@ -172,16 +183,42 @@ export function Checkin({
           ...a,
           { promptId: prompt.id, responseType: prompt.response_type, value },
         ]);
+        if (value !== null) {
+          setPairs((p) => [
+            ...p,
+            {
+              // The question as asked, which the picker may have reworded.
+              question: (activeStep ?? step).prompt.text,
+              answer: value,
+              responseType: prompt.response_type,
+            },
+          ]);
+        }
       }
 
       setInputText("");
       setPicked([]);
       const next = index + 1;
       setIndex(next);
-      if (next < steps.length) askAt(next);
-      else setActiveStep(null);
+      if (next < steps.length) {
+        askAt(next);
+        return;
+      }
+
+      // The closing screen is not a prompt, but it still needs announcing: the
+      // textarea was appearing with nothing said about it.
+      setActiveStep(null);
+      setTyping(true);
+      later(() => {
+        setTyping(false);
+        push({
+          from: "bot",
+          kind: "text",
+          text: "Here's your day. Change anything I got wrong, then keep it.",
+        });
+      }, TIMING.typing);
     },
-    [index, steps, push, askAt],
+    [index, steps, activeStep, push, askAt, later],
   );
 
   // Draft once the questions are done.
@@ -190,25 +227,14 @@ export function Checkin({
     draftRequested.current = true;
     setDrafting(true);
 
-    const written = answersRef.current
-      .filter((a) => a.value)
-      .map((a) => a.value as string)
-      .join("\n");
-
-    draftToday({
-      mood: null,
-      highlight: anchorsRef.current["a002"] ?? null,
-      outside: null,
-      gratitude: null,
-      open: written || null,
-    })
+    draftToday(contextAnswers())
       .then(({ draft: d, usedModel, verbatim }) => {
         setSummary(d.summary);
         setDraft({ ...d, usedModel, verbatim });
       })
       .catch(() => setDraft(null))
       .finally(() => setDrafting(false));
-  }, [atSummary]);
+  }, [atSummary, contextAnswers]);
 
   useEffect(() => {
     const el = chatRef.current;

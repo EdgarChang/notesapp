@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { Step } from "./checkin";
 import type { Moment } from "./retrospect";
-import { moodLabel, type Mood } from "./entries";
+import type { Mood } from "./entries";
 
 /**
  * The provider seam. Everything the app knows about drafting lives behind
@@ -24,16 +24,32 @@ import { moodLabel, type Mood } from "./entries";
  */
 const MODEL = "claude-haiku-4-5";
 
-/** What the six steps collected. */
+/** One question and what was said to it. */
+export type AnsweredPrompt = {
+  question: string;
+  answer: string;
+  /** long_text answers are the person writing at length, and are kept verbatim. */
+  responseType: string;
+};
+
+/**
+ * What the night collected.
+ *
+ * Carries the questions, not just the answers. Without them "My brother, I keep
+ * meaning to call him" is an orphan sentence; with them it is the answer to
+ * whether there was anyone they meant to reach out to, and the summary can say
+ * so.
+ */
 export type CheckinAnswers = {
+  /** Anchor a001, 0 to 10. */
   mood: Mood | null;
-  /** The one thing worth remembering. */
-  highlight: string | null;
-  /** Did they get outside. */
-  outside: boolean | null;
-  gratitude: string | null;
-  /** Whatever they wrote unprompted. Becomes the summary verbatim. */
-  open: string | null;
+  /** Anchor a003, 0 to 10: did the day feel worthwhile. */
+  worthwhile: Mood | null;
+  /** Anchor a002, one word. */
+  feeling: string | null;
+  /** Anchor a004. */
+  people: string[];
+  responses: AnsweredPrompt[];
 };
 
 const DayDraftSchema = z.object({
@@ -59,6 +75,7 @@ Voice:
 - No emoji, ever. No exclamation marks. No therapy-speak, no "grateful for the journey", no "today was a day of".
 
 Rules:
+- The answers arrive as question and answer pairs. Write the day, not a list: fold each answer into a sentence that stands on its own without its question, since the reader will not see the questions again.
 - Invent nothing. Every detail must come from their answers. If they mentioned no people, return an empty people array.
 - Your summary covers \`answersToSummarise\` and nothing else.
 - \`alreadyWrittenByTheUser_neverSummarise\` is text the person wrote themselves. It is printed unchanged directly beneath your summary. It is not material for your summary: do not restate it, paraphrase it, draw details from it, or continue it. If you mention the cat they wrote about, the entry says it twice.
@@ -70,19 +87,24 @@ Rules:
 
 function buildDraftContent(answers: CheckinAnswers): string {
   const lines: string[] = [];
-  if (answers.mood !== null) {
-    lines.push(`How the day landed: ${answers.mood} out of 10 (${moodLabel(answers.mood)})`);
+  if (answers.mood !== null) lines.push(`How the day rated: ${answers.mood} out of 10`);
+  if (answers.worthwhile !== null) {
+    lines.push(`How worthwhile it felt: ${answers.worthwhile} out of 10`);
   }
-  if (answers.highlight) {
-    lines.push(`Worth remembering: ${answers.highlight}`);
-  }
-  if (answers.outside !== null) {
-    lines.push(`Got outside: ${answers.outside ? "yes" : "no"}`);
-  }
-  if (answers.gratitude) {
-    lines.push(`Grateful for: ${answers.gratitude}`);
+  if (answers.feeling) lines.push(`In one word: ${answers.feeling}`);
+  if (answers.people.length) lines.push(`With: ${answers.people.join(", ")}`);
+  for (const r of answers.responses.filter((r) => r.responseType !== "long_text")) {
+    lines.push(`Q: ${r.question}\nA: ${r.answer}`);
   }
   return lines.join("\n");
+}
+
+/** Long-form answers: the person writing at length, kept word for word. */
+export function ownWordsOf(answers: CheckinAnswers): string {
+  return answers.responses
+    .filter((r) => r.responseType === "long_text" && r.answer.trim())
+    .map((r) => r.answer.trim())
+    .join("\n\n");
 }
 
 /**
@@ -95,33 +117,22 @@ function buildDraftContent(answers: CheckinAnswers): string {
  */
 export function composeFallbackDraft(answers: CheckinAnswers): DayDraft {
   const sentences: string[] = [];
-  if (answers.highlight) sentences.push(`${answers.highlight.replace(/\.$/, "")}.`);
-  if (answers.outside === true) sentences.push("Got outside at some point.");
-  if (answers.gratitude) sentences.push(`Grateful for ${asSentenceTail(answers.gratitude)}`);
+  if (answers.mood !== null) sentences.push(`A ${answers.mood} out of 10.`);
+  if (answers.feeling) sentences.push(`Felt ${answers.feeling.toLowerCase()}.`);
+  if (answers.people.length) sentences.push(`With ${answers.people.join(" and ")}.`);
+  for (const r of answers.responses.filter((r) => r.responseType !== "long_text")) {
+    sentences.push(asSentenceTail(r.answer));
+  }
 
-
-
-  const tags: string[] = [];
-  if (answers.outside === true) tags.push("Outside");
-
+  const first = answers.responses.find((r) => r.answer.trim());
   return {
-    title:
-      answers.highlight?.replace(/\.$/, "") ??
-      (answers.open ? firstWords(answers.open) : "A day kept"),
+    title: first ? firstWords(first.answer) : "A day kept",
     summary: sentences.join(" ").trim(),
-    tags,
-    people: [],
+    tags: [],
+    people: answers.people,
   };
 }
 
-/**
- * Tidy the user's text onto the end of a sentence without altering their words.
- *
- * An earlier version lowercased the first letter, which read better for
- * "The tide being out" but turned "Priya not giving up" into "priya not giving
- * up". Mangling a name is worse than an awkward capital, so the text is left
- * exactly as written and only the full stop is normalised.
- */
 /** First few words of a longer piece of text, for a fallback title. */
 function firstWords(text: string, count = 6): string {
   const words = text.trim().split(/\s+/).slice(0, count).join(" ");
@@ -151,7 +162,7 @@ export async function draftDay(answers: CheckinAnswers): Promise<DayDraft | null
   if (!llmConfigured()) return null;
 
   const answered = buildDraftContent(answers);
-  const ownWords = answers.open?.trim() ?? "";
+  const ownWords = ownWordsOf(answers);
   if (!answered.trim() && !ownWords) return null;
 
   const content = JSON.stringify(
@@ -260,10 +271,10 @@ function buildPickerContent(
   previousAnswer: string | null,
 ): string {
   const said: string[] = [];
-  if (answers.mood !== null) said.push(`mood: ${answers.mood}/10`);
-  if (answers.highlight) said.push(`worth remembering: ${answers.highlight}`);
-  if (answers.outside !== null) said.push(`got outside: ${answers.outside ? "yes" : "no"}`);
-  if (answers.gratitude) said.push(`grateful for: ${answers.gratitude}`);
+  if (answers.mood !== null) said.push(`rated the day ${answers.mood}/10`);
+  if (answers.feeling) said.push(`in one word: ${answers.feeling}`);
+  if (answers.people.length) said.push(`spent time with ${answers.people.join(", ")}`);
+  for (const r of answers.responses) said.push(`${r.question} -> ${r.answer}`);
 
   return JSON.stringify(
     {

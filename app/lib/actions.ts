@@ -8,6 +8,7 @@ import {
   composeFallbackDraft,
   draftDay,
   extractMentions,
+  ownWordsOf,
   pickNextQuestion,
   writeRetrospect,
   type CheckinAnswers,
@@ -153,7 +154,7 @@ export async function saveCheckin(input: CheckinInput): Promise<SaveResult> {
 export async function draftToday(
   answers: CheckinAnswers,
 ): Promise<{ draft: DayDraft; usedModel: boolean; verbatim: boolean }> {
-  const own = answers.open?.trim();
+  const own = ownWordsOf(answers);
 
   const drafted = await draftDay(answers);
   const base = drafted ?? composeFallbackDraft(answers);
