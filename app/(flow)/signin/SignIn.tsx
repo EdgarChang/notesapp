@@ -5,7 +5,19 @@ import { useState } from "react";
 import { createClient } from "@/app/lib/supabase/client";
 import styles from "./signin.module.css";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
+
+const LEDE: Record<Mode, string> = {
+  signin: "Sign in to pick up where you left off.",
+  signup: "A minute a night. We ask, you answer, and the year stops being a blur.",
+  reset: "Tell us your email and we'll send a link to set a new password.",
+};
+
+const CTA: Record<Mode, string> = {
+  signin: "Sign in",
+  signup: "Create account",
+  reset: "Send the link",
+};
 
 export function SignIn({ next, initialError }: { next: string; initialError?: string }) {
   const router = useRouter();
@@ -25,6 +37,27 @@ export function SignIn({ next, initialError }: { next: string; initialError?: st
     setNotice(null);
 
     const supabase = createClient();
+
+    if (mode === "reset") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      });
+
+      // Anything other than a transport or rate-limit failure is reported the
+      // same way below, so the screen never reveals whether an address has an
+      // account behind it.
+      if (error) {
+        setError(error.message);
+        setBusy(false);
+        return;
+      }
+
+      setNotice(
+        "If that address has an account, a link is on its way. It expires in an hour.",
+      );
+      setBusy(false);
+      return;
+    }
 
     if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({
@@ -73,11 +106,7 @@ export function SignIn({ next, initialError }: { next: string; initialError?: st
           <br />
           Keep A Few.
         </h2>
-        <p className={styles.lede}>
-          {mode === "signin"
-            ? "Sign in to pick up where you left off."
-            : "A minute a night. We ask, you answer, and the year stops being a blur."}
-        </p>
+        <p className={styles.lede}>{LEDE[mode]}</p>
 
         <form className={styles.form} onSubmit={submit}>
           <div className={styles.field}>
@@ -97,6 +126,7 @@ export function SignIn({ next, initialError }: { next: string; initialError?: st
             />
           </div>
 
+          {mode === "reset" ? null : (
           <div className={styles.field}>
             <label className={styles.label} htmlFor="password">
               Password
@@ -114,6 +144,21 @@ export function SignIn({ next, initialError }: { next: string; initialError?: st
               disabled={busy}
             />
           </div>
+          )}
+
+          {mode === "signin" ? (
+            <button
+              type="button"
+              className={styles.quietLink}
+              onClick={() => {
+                setMode("reset");
+                setError(null);
+                setNotice(null);
+              }}
+            >
+              Forgot your password?
+            </button>
+          ) : null}
 
           {error ? (
             <div className={styles.error} role="alert">
@@ -128,11 +173,7 @@ export function SignIn({ next, initialError }: { next: string; initialError?: st
           ) : null}
 
           <button type="submit" className={styles.cta} disabled={busy}>
-            {busy
-              ? "One moment…"
-              : mode === "signin"
-                ? "Sign in"
-                : "Create account"}
+            {busy ? "One moment…" : CTA[mode]}
           </button>
         </form>
       </div>

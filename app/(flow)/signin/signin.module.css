@@ -129,3 +129,20 @@
   color: var(--fg-brand);
   cursor: pointer;
 }
+
+/* "Forgot your password?", sitting under the password field. */
+.quietLink {
+  align-self: flex-start;
+  margin-top: -4px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-brand);
+  cursor: pointer;
+}
+
+.quietLink:hover {
+  text-decoration: underline;
+}

@@ -72,6 +72,7 @@ app/
 | `/insights` | Insights | yes |
 | `/entry/[id]` | Entry detail | yes |
 | `/checkin` | Nightly check-in | no |
+| `/reset-password` | Set a new password after a recovery link | no |
 | `/onboarding` | First-run setup | no |
 
 ## Design source of truth
@@ -167,6 +168,36 @@ A stored retrospect carries a fingerprint of the entries it was built from:
 their count plus the latest `updated_at` in the range. Editing a day without
 adding one still changes that, so a stale look back is offered for regeneration
 rather than shown.
+
+## Forgotten passwords
+
+The sign-in screen has a third mode behind "Forgot your password?". It calls
+`resetPasswordForEmail` with a redirect to `/auth/callback?next=/reset-password`,
+so the recovery link runs through the same code exchange as an email
+confirmation. The exchange is what gives `/reset-password` its session, which is
+why that route is private: without one the middleware sends you to sign in, and
+that is what stops the screen being a way to set a password on someone else's
+account.
+
+The reset request answers the same way whether or not the address has an
+account behind it, so the screen cannot be used to find out who has registered.
+Supabase's own address-format complaints still surface, since those say nothing
+about accounts.
+
+The callback maps Supabase's `error_code` to our own copy rather than showing
+its `error_description`. That value arrives in the URL and would be rendered on
+the sign-in screen, which would let a crafted link put arbitrary text in front
+of someone.
+
+**It cannot deliver anything yet.** Recovery mail needs custom SMTP, the same
+dependency as turning email confirmation back on. Until that is configured the
+request succeeds and no mail arrives. The `alpha@keepsake.test` account cannot
+receive one in any case: Supabase rejects `.test` as undeliverable.
+
+Untested end to end for the same reason: the link round trip, the code
+exchange, and `updateUser` on the other side have never run against a real
+message. What is verified is the request, the neutral response, the route
+guard, and the expired-link path.
 
 ## Known facades
 
